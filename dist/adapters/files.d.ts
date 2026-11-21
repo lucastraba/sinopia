@@ -1,3 +1,5 @@
+/** True for a path inside a folder no map holds: dependencies, builds, tool state, the sinopia adapter. */
+export declare const isSkippedPath: (path: string) => boolean;
 /**
  * The repo's files: tracked and untracked-but-not-ignored ones in a working
  * tree, or everything outside build and dependency folders in a snapshot.

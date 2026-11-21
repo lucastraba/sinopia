@@ -29,6 +29,10 @@ const SKIPPED_DIRS = new Set([
   '.idea',
 ]);
 
+/** True for a path inside a folder no map holds: dependencies, builds, tool state, the sinopia adapter. */
+export const isSkippedPath = (path: string): boolean =>
+  path.split('/').some((segment) => SKIPPED_DIRS.has(segment));
+
 const walk = (root: string, prefix = ''): string[] =>
   readdirSync(join(root, prefix), { withFileTypes: true }).flatMap((entry) => {
     const rel = prefix ? `${prefix}/${entry.name}` : entry.name;

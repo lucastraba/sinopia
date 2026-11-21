@@ -1,3 +1,4 @@
+import { isSkippedPath } from './adapters/files.js';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { parseArgs } from 'node:util';
@@ -276,7 +277,13 @@ export const runCli = async (options: CliOptions): Promise<void> => {
         : ['diff', '--name-status', '--no-renames', baseSha]
     );
     const untracked = headRef ? '' : git(repo, ['ls-files', '--others', '--exclude-standard']);
-    const diff = diffGraphs(base, head, changedFiles, untracked, notes, adapter.partOf);
+    // Files no map holds (dependencies, tool state, the adapter itself) aren't changes to the code.
+    const mapped = (lines: string) =>
+      lines
+        .split('\n')
+        .filter((line) => line && !isSkippedPath(line.split('\t').pop() ?? ''))
+        .join('\n');
+    const diff = diffGraphs(base, head, mapped(changedFiles), mapped(untracked), notes, adapter.partOf);
     writeFileSync(join(out, 'diff.json'), JSON.stringify(diff, null, 2));
     console.log(values.json ? JSON.stringify(diff, null, 2) : formatDiff(diff));
     return;

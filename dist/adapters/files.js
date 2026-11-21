@@ -27,6 +27,8 @@ const SKIPPED_DIRS = new Set([
     '.vscode',
     '.idea',
 ]);
+/** True for a path inside a folder no map holds: dependencies, builds, tool state, the sinopia adapter. */
+export const isSkippedPath = (path) => path.split('/').some((segment) => SKIPPED_DIRS.has(segment));
 const walk = (root, prefix = '') => readdirSync(join(root, prefix), { withFileTypes: true }).flatMap((entry) => {
     const rel = prefix ? `${prefix}/${entry.name}` : entry.name;
     if (entry.isDirectory())

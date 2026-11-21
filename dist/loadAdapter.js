@@ -1,6 +1,7 @@
 import { existsSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { UsageError } from './args.js';
 import { LOCAL_ADAPTER } from './adapterInit.js';
 import { autoAdapter, folderAdapter } from './adapters/folders.js';
 /**
@@ -32,6 +33,6 @@ export const pickAdapter = async (choice, repo, name) => {
         return { adapter, source: adapter.name };
     }
     if (!existsSync(file))
-        throw new Error(`No adapter at ${file}`);
+        throw new UsageError(`No adapter at ${file}`);
     return { adapter: await loadAdapterFile(file, repo, name), source: file };
 };

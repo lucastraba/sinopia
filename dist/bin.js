@@ -1,10 +1,11 @@
 #!/usr/bin/env node
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { basename, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
 import { AdapterVersionError } from './adapter.js';
+import { splitCommandArgs, UsageError } from './args.js';
 import { pickAdapter } from './loadAdapter.js';
 import { adapterInit, LOCAL_ADAPTER } from './adapterInit.js';
 import { runCli } from './cli.js';
@@ -74,31 +75,15 @@ const main = async () => {
             process.exitCode = 1;
         return;
     }
-    const { values, positionals } = parseArgs({
-        args: rest,
-        allowPositionals: true,
-        strict: false,
-        options: {
-            adapter: { type: 'string', default: 'auto' },
-            name: { type: 'string' },
-            out: { type: 'string' },
-        },
-    });
-    const repo = repoRoot(resolve(positionals[0] ?? '.'));
-    const name = typeof values.name === 'string' ? values.name : basename(repo);
-    const out = resolve(typeof values.out === 'string' ? values.out : join(home, 'maps', name));
-    const { adapter, source } = await pickAdapter(typeof values.adapter === 'string' ? values.adapter : 'auto', repo, name);
-    const own = new Set(['--adapter', '--name', '--out']);
-    const argv = [command];
-    for (let index = 0; index < rest.length; index += 1) {
-        const arg = rest[index] ?? '';
-        if (own.has(arg)) {
-            index += 1;
-        }
-        else if (![...own].some((flag) => arg.startsWith(`${flag}=`)) && arg !== positionals[0]) {
-            argv.push(arg);
-        }
-    }
+    const parsed = splitCommandArgs(rest);
+    const repoPath = resolve(parsed.repo ?? '.');
+    if (!existsSync(repoPath))
+        throw new UsageError(`No folder at ${repoPath}`);
+    const repo = repoRoot(repoPath);
+    const name = parsed.name ?? basename(repo);
+    const out = resolve(parsed.out ?? join(home, 'maps', name));
+    const { adapter, source } = await pickAdapter(parsed.adapter, repo, name);
+    const argv = [command, ...parsed.passOn];
     await runCli({ adapter, adapterSource: source, repo, out, argv, command: 'sinopia', diffBase: null });
 };
 try {
@@ -107,6 +92,6 @@ try {
 catch (error) {
     // A version mismatch is a message for the user; anything else is a bug, maybe in
     // a project's adapter, and its stack says where.
-    console.error(error instanceof AdapterVersionError ? error.message : error);
+    console.error(error instanceof AdapterVersionError || error instanceof UsageError ? error.message : error);
     process.exitCode = 1;
 }
