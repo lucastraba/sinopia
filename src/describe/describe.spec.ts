@@ -17,3 +17,21 @@ describe('chunkBySize', () => {
     ]);
   });
 });
+
+describe('cache keys and adapter links', () => {
+  const file = {
+    id: 'hub/counter.ts', part: 'hub', kind: 'other' as const, lines: 3, hash: 'abc',
+    imports: [], libraries: [], components: [], operations: [], flags: [], registeredAs: null,
+  };
+
+  it('keeps the key of a file without links, and changes it when links arrive', async () => {
+    const { fileKey } = await import('./describe.js');
+    const plain = fileKey(file);
+    expect(fileKey({ ...file, links: [] })).toBe(plain);
+    const linked = fileKey({ ...file, links: [{ target: 'server/counter.ts', kind: 'trpc', label: 'counters.increment' }] });
+    expect(linked).not.toBe(plain);
+    expect(
+      fileKey({ ...file, links: [{ target: 'server/counter.ts', kind: 'trpc', label: 'counters.increment' }] })
+    ).toBe(linked);
+  });
+});

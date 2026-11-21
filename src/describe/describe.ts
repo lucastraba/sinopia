@@ -55,11 +55,21 @@ interface DescribedEntry {
 
 const sha1 = (value: string) => createHash('sha1').update(value).digest('hex');
 
+/**
+ * What a file's adapter links add to its cache key: a description should say
+ * what the file connects to, so new links mean a new description. Empty for a
+ * file without them, so maps from generic adapters keep their keys.
+ */
+const linkSignature = (file: FileNode): string => {
+  const links = [...new Set((file.links ?? []).map((link) => `${link.kind} ${link.label ?? ''} ${link.target}`))].sort();
+  return links.length > 0 ? `:${links.join('|')}` : '';
+};
+
 export const fileKey = (file: FileNode) =>
-  sha1(`${PROMPT_VERSION}:${file.hash}`);
+  sha1(`${PROMPT_VERSION}:${file.hash}${linkSignature(file)}`);
 
 export const partKey = (part: Part, graph: Graph) => {
-  const hashes = new Map(graph.files.map((file) => [file.id, file.hash]));
+  const hashes = new Map(graph.files.map((file) => [file.id, `${file.hash}${linkSignature(file)}`]));
   const operations = graph.operations.filter(
     (operation) => operation.part === part.id
   );

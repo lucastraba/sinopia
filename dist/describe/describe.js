@@ -7,9 +7,18 @@ import { APP_SCHEMA, appPrompt, FILES_SCHEMA, filesPrompt, PART_SCHEMA, partProm
 const CHUNK_CHARS = 120_000;
 const CONCURRENCY = 4;
 const sha1 = (value) => createHash('sha1').update(value).digest('hex');
-export const fileKey = (file) => sha1(`${PROMPT_VERSION}:${file.hash}`);
+/**
+ * What a file's adapter links add to its cache key: a description should say
+ * what the file connects to, so new links mean a new description. Empty for a
+ * file without them, so maps from generic adapters keep their keys.
+ */
+const linkSignature = (file) => {
+    const links = [...new Set((file.links ?? []).map((link) => `${link.kind} ${link.label ?? ''} ${link.target}`))].sort();
+    return links.length > 0 ? `:${links.join('|')}` : '';
+};
+export const fileKey = (file) => sha1(`${PROMPT_VERSION}:${file.hash}${linkSignature(file)}`);
 export const partKey = (part, graph) => {
-    const hashes = new Map(graph.files.map((file) => [file.id, file.hash]));
+    const hashes = new Map(graph.files.map((file) => [file.id, `${file.hash}${linkSignature(file)}`]));
     const operations = graph.operations.filter((operation) => operation.part === part.id);
     return sha1([
         PROMPT_VERSION,
