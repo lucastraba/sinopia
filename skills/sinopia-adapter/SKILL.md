@@ -37,6 +37,7 @@ Read the code, starting from the README, the package manifests and the entry poi
 | Mechanism | Declared where | Called where |
 |---|---|---|
 | tRPC | `router({ ... })` objects, `t.procedure`, `publicProcedure`, the root `appRouter` that nests routers by key | `trpc.<router>.<proc>.useQuery(`, `.query(`, `.mutate(`, `.subscribe(`, `useMutation(` |
+| The client's connection itself | the server file that listens on a path (`new WebSocketServer({ path: '/ws' })`, a `/trpc` or `/api` handler) | where the client is built with a URL (`createWSClient({ url })`, `httpBatchLink({ url })`, `new WebSocket(url)`, `axios.create({ baseURL })`) |
 | REST between your own apps | `app.get('/path'`, `router.post(`, framework route files | `fetch('/path'`, `axios.get(`, a generated or hand-written client |
 | WebSocket and Socket.IO events | `socket.on('event'`, `ws.on('message'` with a switch on a type field | `socket.emit('event'`, `ws.send(JSON.stringify({ type: 'event'` |
 | Message buses and queues | `subscribe('topic'`, consumers, event handler maps | `publish('topic'`, `emit(`, queue producers |
@@ -45,8 +46,11 @@ Read the code, starting from the README, the package manifests and the entry poi
 | Processes and services | the program that's started or the service that listens (often another language) | `spawn(`, `exec(`, a URL built from an env var, a Docker or compose file |
 | Registries by name | a map from strings to modules (commands, plugins, handlers) | the place that looks up the string |
 | Contracts with other repos | shared schema files, published types | the code on this side that relies on them |
+| Config that names files | the file named (a test setup file, a workspace project, a build entry) | the config that names it (`setupFiles`, a workspace list, `pyproject.toml` scripts) |
 
 For each mechanism you find, write down the pattern on both sides, how a call is matched to its handler (a procedure path like `counter.increment`, an event name, a URL path), and two or three concrete examples from the code. Check the examples by reading them, not by guessing from names.
+
+Services outside the repo (a third-party API, another team's server) have no file to link to. Record each as an `info` gap on the file that calls it, for example `{ kind: 'external-service', level: 'info', file, detail: 'POST {EMBERHOLLOW_URL}/api/cmd (Emberhollow)' }`, so the map's scan notes list them. Don't invent a target.
 
 Also look at `isolated.examples` from the baseline. Each isolated file either stands alone (a one-off script, a config file, a test helper) or is reached through a mechanism you haven't found yet. Find out which for every one.
 
@@ -75,6 +79,8 @@ Repeat sections 4 to 6 until both of these hold:
 1. `passes` is true: no errors.
 2. Two rounds in a row change nothing: no fewer isolated files, no more part-to-part links, no new link kinds, and every remaining isolated file is one you've decided stands alone.
 
+Then check recall: for each mechanism, search the repo for its calling pattern and confirm that every non-test file that matches got at least one link of that kind. A file the search finds and the adapter doesn't is either a call shape your matcher misses or a false hit in a comment or string; find out which.
+
 Then check precision: pick five links of each new kind from `graph.json` (`sinopia scan` writes it to the map folder that it prints) and confirm in the code that each one is real. A wrong link is worse than a missing one, because the map states it as fact. Fix the matcher if any are wrong.
 
 If the adapter throws, `sinopia check` prints the stack trace, and the top frame in `.sinopia/adapter.mjs` is where to look.
@@ -89,7 +95,7 @@ When `sinopia` says the adapter implements an older interface version:
 
 ## 8. Finish
 
-- Commit `.sinopia/adapter.mjs` with the repo. Sinopia loads it automatically from then on, also for `refresh` timers.
+- Commit `.sinopia/adapter.mjs` with the repo: on the branch the user is working on, or on a new branch when you're not sure that's wanted. Sinopia loads it automatically from then on, also for `refresh` timers.
 - Put the numbers at the top of the adapter as a comment: generic baseline and the adapter's result (isolated count, links by kind, part-to-part links), with the date. The next agent compares against it.
 - Tell the user what changed, in numbers: errors, isolated files before and after, part-to-part links before and after, the link kinds added with counts, what's still isolated and why, and any mechanism you saw but didn't map, with the reason.
 - If the map already had descriptions, `sinopia refresh --force` (or `scan` then `describe`) updates them. Files whose content didn't change keep their descriptions; the new links show in the viewer at once.
