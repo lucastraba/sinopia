@@ -1,3 +1,4 @@
+import { closeSync, openSync, readSync } from 'node:fs';
 import { basename, join } from 'node:path';
 import type { Adapter, ScanInput } from '../adapter.js';
 import { CODE_FILE, cruiseWithoutConfig, type ImportScan } from '../cruise.js';
@@ -5,14 +6,32 @@ import { personalRules } from '../describe/prompt.js';
 import type { FileKind, FileNode, Gap, Graph, GraphMeta, Part } from '../model.js';
 import { ensureDir } from '../repo.js';
 import { validateGraph } from '../validate.js';
-import { folderPartOf, listFiles, packageDirsOf, readmeOf, readText, sha1 } from './files.js';
+import { folderPartOf, folderPartsOf, listFiles, packageDirsOf, readmeOf, readText, sha1 } from './files.js';
 
 const MAX_BYTES = 200_000;
 
 /** Text files worth describing in a repo without a code structure the map understands. */
 const TEXT_FILE =
   /\.(lua|sh|bash|zsh|fish|py|rb|go|rs|el|vim|nix|ps1|js|mjs|cjs|ts|tsx|jsx|vue|svelte|md|txt|toml|ya?ml|ini|conf|cfg|service|timer|socket|json|sql|html|css)$/i;
+/** Code a JS repo may hold besides JS/TS (scripts, a Python helper): listed, without links. */
+const OTHER_CODE_FILE = /\.(lua|sh|bash|zsh|fish|py|rb|go|rs|el|nix|ps1)$/i;
 const SKIPPED_FILE = /(^|\/)(package-lock\.json|pnpm-lock\.yaml|yarn\.lock|bun\.lockb?|Cargo\.lock|poetry\.lock|uv\.lock)$/;
+
+/** An executable script without an extension (`bin/deploy`): its first line is a shebang. */
+const isExtensionlessScript = (root: string, path: string): boolean => {
+  const name = path.split('/').pop() ?? path;
+  if (name.includes('.')) return false;
+  let fd: number | null = null;
+  try {
+    fd = openSync(join(root, path), 'r');
+    const head = Buffer.alloc(2);
+    return readSync(fd, head, 0, 2, 0) === 2 && head.toString() === '#!';
+  } catch {
+    return false;
+  } finally {
+    if (fd !== null) closeSync(fd);
+  }
+};
 
 export const fileKindOf = (path: string): FileKind => {
   const name = path.split('/').pop() ?? path;
@@ -26,7 +45,7 @@ export const fileKindOf = (path: string): FileKind => {
   }
   if (/\.(vue|svelte|tsx|jsx)$/.test(name)) return 'component';
   if (/\.(types?)\.\w+$/.test(name)) return 'type';
-  if (/\.(sh|bash|zsh|fish|lua|py|rb|ps1)$/i.test(name)) return 'script';
+  if (/\.(sh|bash|zsh|fish|lua|py|rb|ps1)$/i.test(name) || !name.includes('.')) return 'script';
   return 'other';
 };
 
@@ -63,12 +82,21 @@ interface FolderAdapterOptions {
  * only lists files and leaves the rest to the descriptions.
  */
 export const folderAdapter = (repo: string, { mode, name = basename(repo) }: FolderAdapterOptions): Adapter => {
-  const packageDirs = packageDirsOf(listFiles(repo));
-  const include = (path: string) =>
-    !SKIPPED_FILE.test(path) && (mode === 'js' ? CODE_FILE.test(path) : TEXT_FILE.test(path));
+  const include = (root: string, path: string) => {
+    if (SKIPPED_FILE.test(path)) return false;
+    const byName = mode === 'js' ? CODE_FILE.test(path) || OTHER_CODE_FILE.test(path) : TEXT_FILE.test(path);
+    return byName || isExtensionlessScript(root, path);
+  };
+  /** The parts come from the files the map holds; package.json files mark the packages among them. */
+  const partsAt = (root: string) => {
+    const files = listFiles(root);
+    return folderPartsOf(files.filter((path) => include(root, path)), packageDirsOf(files));
+  };
+  const repoParts = partsAt(repo);
 
   const scan = async ({ root, artifacts, source }: ScanInput): Promise<Graph> => {
-    const paths = listFiles(root).filter(include);
+    const paths = listFiles(root).filter((path) => include(root, path));
+    const partDirs = root === repo ? repoParts : partsAt(root);
     const gaps: Gap[] = [];
     let imports: ImportScan | null = null;
     if (mode === 'js' && paths.length > 0) {
@@ -85,7 +113,7 @@ export const folderAdapter = (repo: string, { mode, name = basename(repo) }: Fol
     for (const path of paths) {
       const content = readText(join(root, path), MAX_BYTES);
       if (content === null) continue;
-      const part = folderPartOf(path, packageDirs);
+      const part = folderPartOf(path, partDirs);
       const entry = parts.get(part.id) ?? { ...part, files: [] };
       entry.files.push(path);
       parts.set(part.id, entry);
@@ -130,7 +158,7 @@ export const folderAdapter = (repo: string, { mode, name = basename(repo) }: Fol
   return {
     name: mode,
     scan,
-    partOf: (path) => folderPartOf(path, packageDirs).id,
+    partOf: (path) => folderPartOf(path, repoParts).id,
     snapshotPaths: null,
     describeContext: async ({ repo: root }) => ({
       rules: personalRules(name),
