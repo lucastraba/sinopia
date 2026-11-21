@@ -1,3 +1,4 @@
+import { linkTargets } from '../links';
 import type {
   Description,
   Descriptions,
@@ -40,13 +41,8 @@ const push = <K, V>(map: Map<K, V[]>, key: K, value: V) => {
   map.set(key, list);
 };
 
-/** File ids a file links to: imports and rendered components. */
-export const linksOf = (file: FileNode): string[] => [
-  ...new Set([
-    ...file.imports,
-    ...file.components.flatMap((use) => (use.target ? [use.target] : [])),
-  ]),
-];
+/** File ids a file links to: imports, rendered components and the adapter's own links. */
+export const linksOf = (file: FileNode): string[] => linkTargets(file);
 
 export const buildIndex = (
   graph: Graph,

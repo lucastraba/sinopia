@@ -21,6 +21,8 @@ const SKIPPED_DIRS = new Set([
     'vendor',
     // Editor and agent tool state, not the project's code.
     '.serena',
+    // Where a project keeps its sinopia adapter: tooling, not the project's code.
+    '.sinopia',
     '.history',
     '.vscode',
     '.idea',

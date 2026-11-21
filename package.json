@@ -18,7 +18,10 @@
   },
   "files": [
     "dist",
-    "viewer-dist"
+    "viewer-dist",
+    "docs",
+    "skills",
+    ".claude-plugin"
   ],
   "scripts": {
     "build": "rm -rf dist viewer-dist && tsc -p tsconfig.build.json && chmod +x dist/bin.js && vite build",

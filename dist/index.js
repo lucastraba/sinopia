@@ -1,4 +1,8 @@
-export { autoAdapter, chooseMode, folderAdapter } from './adapters/folders.js';
+export { ADAPTER_INTERFACE_VERSION, AdapterVersionError, assertAdapterVersion, } from './adapter.js';
+export { folderPartOf, folderPartsOf, listFiles, packageDirsOf, readmeOf, readText, sha1, } from './adapters/files.js';
+export { autoAdapter, chooseMode, fileKindOf, folderAdapter } from './adapters/folders.js';
+export { coverageOf, formatCoverage } from './coverage.js';
+export { addLink, fileLinks, linkTargets } from './links.js';
 export { readState, runCli } from './cli.js';
 export { CODE_FILE, cruiseWithoutConfig, cruiseWithRepoConfig, normalizeCycle, readCruise, } from './cruise.js';
 export { describe } from './describe/describe.js';

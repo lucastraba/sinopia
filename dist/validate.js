@@ -1,4 +1,5 @@
 import { CODE_FILE } from './cruise.js';
+import { fileLinks } from './links.js';
 /**
  * Checks the graph against itself and the code it came from: every file sits
  * in exactly one part, every link points at a scanned file, every operation
@@ -43,16 +44,13 @@ export const validateGraph = (graph, scannedFileCount) => {
         }
     }
     for (const file of graph.files) {
-        for (const target of [
-            ...file.imports,
-            ...file.components.flatMap((use) => (use.target ? [use.target] : [])),
-        ]) {
-            if (!fileIds.has(target)) {
+        for (const link of fileLinks(file)) {
+            if (!fileIds.has(link.target)) {
                 gaps.push({
                     kind: 'unresolved-import',
                     level: 'error',
                     file: file.id,
-                    detail: `links to ${target}, which the scan didn't find`,
+                    detail: `${link.kind} link to ${link.target}, which the scan didn't find`,
                 });
             }
         }

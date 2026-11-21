@@ -1,9 +1,9 @@
 import { closeSync, openSync, readSync } from 'node:fs';
 import { basename, join } from 'node:path';
+import { ADAPTER_INTERFACE_VERSION } from '../adapter.js';
 import { CODE_FILE, cruiseWithoutConfig } from '../cruise.js';
 import { personalRules } from '../describe/prompt.js';
 import { ensureDir } from '../repo.js';
-import { validateGraph } from '../validate.js';
 import { folderPartOf, folderPartsOf, listFiles, packageDirsOf, readmeOf, readText, sha1 } from './files.js';
 const MAX_BYTES = 200_000;
 /** Text files worth describing in a repo without a code structure the map understands. */
@@ -145,10 +145,10 @@ export const folderAdapter = (repo, { mode, name = basename(repo) }) => {
             cycles: imports?.cycles ?? [],
             gaps,
         };
-        graph.gaps.push(...validateGraph(graph, files.length));
         return graph;
     };
     return {
+        interfaceVersion: ADAPTER_INTERFACE_VERSION,
         name: mode,
         scan,
         partOf: (path) => folderPartOf(path, repoParts).id,

@@ -1,4 +1,5 @@
 import { CODE_FILE } from './cruise.js';
+import { fileLinks } from './links.js';
 import type { Gap, Graph } from './model.js';
 
 /**
@@ -49,16 +50,13 @@ export const validateGraph = (graph: Graph, scannedFileCount: number): Gap[] => 
   }
 
   for (const file of graph.files) {
-    for (const target of [
-      ...file.imports,
-      ...file.components.flatMap((use) => (use.target ? [use.target] : [])),
-    ]) {
-      if (!fileIds.has(target)) {
+    for (const link of fileLinks(file)) {
+      if (!fileIds.has(link.target)) {
         gaps.push({
           kind: 'unresolved-import',
           level: 'error',
           file: file.id,
-          detail: `links to ${target}, which the scan didn't find`,
+          detail: `${link.kind} link to ${link.target}, which the scan didn't find`,
         });
       }
     }

@@ -1,5 +1,5 @@
 import type { Graph, GraphDiff, PartLink } from '../model.js';
-/** Links between parts, from imports and rendered components, with one file-level example each. */
+/** Links between parts, from every kind of file link, with one file-level example each. */
 export declare const partLinks: (graph: Graph) => Map<string, PartLink>;
 /**
  * Compares the graph at the base with the graph at the head and lists what a

@@ -1,10 +1,12 @@
-import type { Adapter } from './adapter.js';
+import { type Adapter } from './adapter.js';
 export interface CliOptions {
     adapter: Adapter;
     repo: string;
     /** Where the graph, descriptions, diff and caches go. */
     out: string;
     argv: string[];
+    /** Where the adapter came from, for error messages (a file path, "js"). */
+    adapterSource?: string;
     /** How the usage text names the command: "pnpm map", "sinopia". */
     command: string;
     /**

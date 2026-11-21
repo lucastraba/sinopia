@@ -1,3 +1,4 @@
+import { linkTargets } from '../links';
 import type { FileKind, Route } from '../model';
 import {
   type Change,
@@ -250,10 +251,7 @@ export const partModel = (
   for (const id of shown) {
     const file = index.files.get(id);
     if (!file) continue;
-    for (const target of new Set([
-      ...file.imports,
-      ...file.components.flatMap((use) => (use.target ? [use.target] : [])),
-    ])) {
+    for (const target of linkTargets(file)) {
       const targetPart = index.files.get(target)?.part;
       if (shownSet.has(target)) addEdge(`file:${id}`, `file:${target}`);
       else if (targetPart && targetPart !== partId)

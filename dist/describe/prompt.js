@@ -1,3 +1,4 @@
+import { linkTargets } from '../links.js';
 /** Bump when the prompts change, so cached descriptions are written again. */
 export const PROMPT_VERSION = 'v1';
 // The plain-language rules are adapted from Floorplan's
@@ -31,11 +32,10 @@ const fileFacts = (file, graph) => {
     const routes = graph.routes.filter((route) => route.component === file.id || route.extraComponents.includes(file.id));
     const usedBy = graph.files
         .filter((candidate) => candidate.kind !== 'test' &&
-        (candidate.imports.includes(file.id) ||
-            candidate.components.some((use) => use.target === file.id)))
+        linkTargets(candidate).includes(file.id))
         .map((candidate) => name(candidate.id));
     const otherParts = [
-        ...new Set(file.imports
+        ...new Set(linkTargets(file)
             .map((id) => partByFile.get(id))
             .filter((part) => part && part !== file.part)),
     ];
@@ -55,6 +55,9 @@ const fileFacts = (file, graph) => {
             : '',
         file.components.length > 0
             ? `renders: ${file.components.map((use) => use.tag).join(', ')}`
+            : '',
+        (file.links ?? []).length > 0
+            ? `other links: ${(file.links ?? []).map((link) => `${link.kind}${link.label ? ` ${link.label}` : ''} -> ${name(link.target)}`).join('; ')}`
             : '',
         operations.length > 0 ? `server calls: ${operations.join('; ')}` : '',
         otherParts.length > 0 ? `uses parts: ${otherParts.join(', ')}` : '',
@@ -90,7 +93,7 @@ export const partPrompt = (part, graph, fileDescriptions, operations) => {
     for (const file of graph.files) {
         if (file.kind === 'test')
             continue;
-        for (const target of file.imports) {
+        for (const target of linkTargets(file)) {
             const to = partByFile.get(target);
             if (file.part === part.id && to && to !== part.id)
                 links.add(to);

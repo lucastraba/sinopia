@@ -1,11 +1,10 @@
 import { closeSync, openSync, readSync } from 'node:fs';
 import { basename, join } from 'node:path';
-import type { Adapter, ScanInput } from '../adapter.js';
+import { ADAPTER_INTERFACE_VERSION, type Adapter, type ScanInput } from '../adapter.js';
 import { CODE_FILE, cruiseWithoutConfig, type ImportScan } from '../cruise.js';
 import { personalRules } from '../describe/prompt.js';
 import type { FileKind, FileNode, Gap, Graph, GraphMeta, Part } from '../model.js';
 import { ensureDir } from '../repo.js';
-import { validateGraph } from '../validate.js';
 import { folderPartOf, folderPartsOf, listFiles, packageDirsOf, readmeOf, readText, sha1 } from './files.js';
 
 const MAX_BYTES = 200_000;
@@ -151,11 +150,11 @@ export const folderAdapter = (repo: string, { mode, name = basename(repo) }: Fol
       cycles: imports?.cycles ?? [],
       gaps,
     };
-    graph.gaps.push(...validateGraph(graph, files.length));
     return graph;
   };
 
   return {
+    interfaceVersion: ADAPTER_INTERFACE_VERSION,
     name: mode,
     scan,
     partOf: (path) => folderPartOf(path, repoParts).id,

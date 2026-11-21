@@ -16,6 +16,18 @@ export interface ComponentUse {
     /** Rendered through a name registered at runtime (string reference), not a template tag. */
     byName: boolean;
 }
+/**
+ * A link an adapter found that is neither an import nor a rendered component:
+ * an RPC call, a message on a bus, a generated client, a contract with another
+ * repo. `kind` names the mechanism ("trpc", "ws-event"); `label` says what
+ * crosses it ("counter.increment").
+ */
+export interface FileLink {
+    /** File id the link points at. */
+    target: string;
+    kind: string;
+    label: string | null;
+}
 export interface FileNode {
     id: string;
     part: string;
@@ -31,6 +43,8 @@ export interface FileNode {
     flags: string[];
     /** Name the component is registered under when it is resolved by name at runtime. */
     registeredAs: string | null;
+    /** Links beyond imports and components. Optional: graphs written before interface v1 have none. */
+    links?: FileLink[];
 }
 export type OperationType = 'query' | 'mutation' | 'subscription';
 /** A call to a server, such as a GraphQL operation. */

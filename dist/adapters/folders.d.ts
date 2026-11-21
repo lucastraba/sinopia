@@ -1,4 +1,4 @@
-import type { Adapter } from '../adapter.js';
+import { type Adapter } from '../adapter.js';
 import type { FileKind } from '../model.js';
 export declare const fileKindOf: (path: string) => FileKind;
 interface FolderAdapterOptions {

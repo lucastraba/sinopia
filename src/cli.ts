@@ -1,14 +1,15 @@
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { parseArgs } from 'node:util';
-import type { Adapter } from './adapter.js';
+import { assertAdapterVersion, type Adapter } from './adapter.js';
+import { coverageOf, formatCoverage } from './coverage.js';
 import { describe } from './describe/describe.js';
 import { diffGraphs } from './diff/diff.js';
 import { formatDiff } from './diff/format.js';
 import type { Graph } from './model.js';
 import { ensureDir, exportSnapshot, git, resolveSha } from './repo.js';
 import { serve } from './serve.js';
-import { summarizeGaps } from './validate.js';
+import { summarizeGaps, validateGraph } from './validate.js';
 
 export interface CliOptions {
   adapter: Adapter;
@@ -16,6 +17,8 @@ export interface CliOptions {
   /** Where the graph, descriptions, diff and caches go. */
   out: string;
   argv: string[];
+  /** Where the adapter came from, for error messages (a file path, "js"). */
+  adapterSource?: string;
   /** How the usage text names the command: "pnpm map", "sinopia". */
   command: string;
   /**
@@ -37,6 +40,7 @@ export interface ProjectState {
 const usage = (command: string) => `${command} <command>
 
   scan                     Scan the working tree into graph.json, plus the validation report
+  check [--json]           Scan without saving and report errors and coverage; exits 1 on errors
   describe [--part <id>]…  Describe parts, files and operations with claude -p (cached by content)
            [--model sonnet] [--estimate]
   diff [--head <ref>] [--base <ref>] [--json]
@@ -46,7 +50,16 @@ const usage = (command: string) => `${command} <command>
   serve [--host <ip>] [--port 8400]
                            The viewer for this map`;
 
-const scanAt = async (
+/** Scans with the adapter, then runs the generic checks on what it returned. */
+const scanAt = async (options: CliOptions, ref: string | null): Promise<Graph> => {
+  const graph = await adapterScan(options, ref);
+  // A plain-mode adapter that adds its own links has links after all.
+  if (graph.files.some((file) => (file.links?.length ?? 0) > 0)) graph.meta.hasLinks = true;
+  graph.gaps.push(...validateGraph(graph, graph.files.length));
+  return graph;
+};
+
+const adapterScan = async (
   { adapter, repo, out }: CliOptions,
   ref: string | null
 ): Promise<Graph> => {
@@ -152,6 +165,7 @@ const readGraph = (out: string): Graph => {
 /** The commands every map has: scan, describe, diff, refresh and serve. */
 export const runCli = async (options: CliOptions): Promise<void> => {
   const { adapter, repo, out, argv } = options;
+  assertAdapterVersion(adapter, options.adapterSource ?? adapter.name);
   ensureDir(out);
   const [command, ...rest] = argv;
   const { values } = parseArgs({
@@ -171,6 +185,20 @@ export const runCli = async (options: CliOptions): Promise<void> => {
 
   if (command === 'scan') {
     await scanCommand(options);
+    return;
+  }
+
+  if (command === 'check') {
+    const graph = await scanAt(options, null);
+    const coverage = coverageOf(graph, options.adapterSource ?? adapter.name);
+    if (values.json) {
+      console.log(JSON.stringify({ ...coverage, gapList: graph.gaps }, null, 2));
+    } else {
+      console.log(`Check of ${repo} with adapter ${coverage.adapter} (interface v${adapter.interfaceVersion})`);
+      for (const line of formatCoverage(coverage)) console.log(`  ${line}`);
+      printGaps(graph);
+    }
+    if (!coverage.passes) process.exitCode = 1;
     return;
   }
 

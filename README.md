@@ -2,24 +2,33 @@
 
 A map of a code base that you can read on a phone. The structure comes from the code (folders, imports, and whatever an adapter knows about the stack); Claude only writes the plain-language descriptions, cached by file content so a refresh only pays for what changed. A sinopia is the underdrawing beneath a fresco.
 
-Private and personal. It started as Helu Map, inspired by [Floorplan](https://github.com/haydenschmitty/floorplan) (MIT); the plain-language rules in `src/describe/prompt.ts` are adapted from its writing guide.
+Private for now. It started as Helu Map, inspired by [Floorplan](https://github.com/haydenschmitty/floorplan) (MIT); the plain-language rules in `src/describe/prompt.ts` are adapted from its writing guide.
+
+Ownership: parts of the core were first written in Helu's frontend repo; Helu confirmed in writing on 2026-11-21 that Sinopia belongs to its author.
+
+Each repo can carry its own adapter (`.sinopia/adapter.mjs`), written by its developers or their agent, for the links a generic scan can't see. Sinopia ships the core, two generic adapters and the instructions for writing one: [`docs/adapters.md`](docs/adapters.md).
 
 ## Commands
 
 ```bash
 sinopia scan [repo]        # graph.json and the validation report
+sinopia check [repo]       # errors and coverage, without saving; --json for agents
+sinopia adapter init [repo]   # .sinopia/adapter.mjs from the generic adapter, plus next steps
+sinopia adapter docs       # the adapter interface
 sinopia describe [repo]    # descriptions with claude -p; --estimate prints the cost first
 sinopia diff [repo] [--head <ref>] [--base <ref>]
 sinopia refresh [repo]     # scan and describe if HEAD moved since the last refresh
 sinopia serve --host <tailscale ip> [--port 8400]   # every map at /p/<name>/
 ```
 
-Maps go to `$SINOPIA_HOME/maps/<name>` (default `~/.local/share/sinopia/maps`). `--adapter auto|js|plain` picks how a repo is read; `auto` uses `js` when most code is JS/TS and there's a `package.json`, `plain` otherwise. `SINOPIA_CLAUDE` points at the `claude` CLI where it isn't on PATH (systemd units).
+Maps go to `$SINOPIA_HOME/maps/<name>` (default `~/.local/share/sinopia/maps`). `--adapter auto|js|plain|<file>` picks how a repo is read; `auto` uses the repo's `.sinopia/adapter.mjs` when it has one, else `js` when most code is JS/TS and there's a `package.json`, `plain` otherwise. `SINOPIA_CLAUDE` points at the `claude` CLI where it isn't on PATH (systemd units).
 
 ## Layout
 
 - `src/model.ts`: the graph. `meta` carries a map's title, part groups and optional sections (server calls, screens, a POC-style boundary, a component library), so diff and the viewer don't know any one stack.
-- `src/adapter.ts`: the interface an adapter implements: `scan`, `partOf`, `snapshotPaths`, `describeContext`.
+- `src/adapter.ts`: the interface an adapter implements and its version (`ADAPTER_INTERFACE_VERSION`); `docs/adapters.md` documents it. Bump the version for any change an existing adapter must follow, and add the upgrade steps to that doc.
+- `src/loadAdapter.ts`, `src/adapterInit.ts`: picking and loading a project's adapter, and scaffolding one.
+- `src/links.ts`, `src/coverage.ts`: every link out of a file (imports, components, adapter links), and the coverage numbers `check` prints.
 - `src/adapters/folders.ts`: `js` (folders as parts, imports from dependency-cruiser without a config) and `plain` (folders and files, no links, for Lua, shell and Python repos).
 - `src/cli.ts`: `runCli`, the commands every map has; a project with its own adapter (Helu's frontend) calls it from its own CLI.
 - `src/describe/`, `src/diff/`, `src/validate.ts`, `src/serve.ts`: describe, diff, the graph checks, and the HTTP server.

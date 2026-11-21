@@ -179,6 +179,13 @@ const view = computed(() => {
           .map(fileRow),
       });
       sections.push({
+        title: 'Other links',
+        rows: (file.links ?? []).map((link) => ({
+          ...fileRow(link.target),
+          hint: link.label ? `${link.kind} ${link.label}` : link.kind,
+        })),
+      });
+      sections.push({
         title: 'Used by',
         rows: (index.usedBy.get(file.id) ?? []).map(fileRow),
       });

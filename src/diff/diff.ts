@@ -1,3 +1,4 @@
+import { linkTargets } from '../links.js';
 import type {
   Gap,
   Graph,
@@ -8,17 +9,13 @@ import type {
   TouchedPart,
 } from '../model.js';
 
-/** Links between parts, from imports and rendered components, with one file-level example each. */
+/** Links between parts, from every kind of file link, with one file-level example each. */
 export const partLinks = (graph: Graph): Map<string, PartLink> => {
   const partByFile = new Map(graph.files.map((file) => [file.id, file.part]));
   const links = new Map<string, PartLink>();
   for (const file of graph.files) {
     if (file.kind === 'test') continue;
-    const targets = [
-      ...file.imports,
-      ...file.components.flatMap((use) => (use.target ? [use.target] : [])),
-    ];
-    for (const target of targets) {
+    for (const target of linkTargets(file)) {
       const to = partByFile.get(target);
       if (!to || to === file.part) continue;
       const key = `${file.part} -> ${to}`;
