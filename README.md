@@ -25,6 +25,18 @@ The Claude Code plugin, with the `sinopia` and `sinopia-adapter` skills:
 
 On Claude Code 2.1.275 or later, `/plugin install sinopia --marketplace lucastraba/sinopia` does both. The repo is private for now, so both need GitHub access to it.
 
+## Try it on a project
+
+You need Node 22 or newer, git, and Claude Code logged in. It runs on macOS and Linux; Windows is untested.
+
+1. Install the CLI and the plugin (above), then open Claude Code in your repo.
+2. Ask for a map ("make a sinopia map of this repo"). The `sinopia` skill scans the code (free, seconds) and runs `sinopia check`, which says how connected the map is.
+3. If `check` shows many isolated files, or your code talks across boundaries that imports don't show (RPC, sockets, queues, generated clients, another language), ask Claude to write a sinopia adapter. The `sinopia-adapter` skill writes `.sinopia/adapter.mjs` and keeps going until `check` passes and stops improving. Commit that file.
+4. Describe: `sinopia describe --estimate` shows how much code there is, then `sinopia describe` writes the descriptions. With Sonnet, a 30-file repo costs well under a dollar at API prices and a 300-file repo three or four; on a Claude subscription it counts against your usage limits instead.
+5. Look at it: `sinopia serve`, then open http://127.0.0.1:8400. Later, `sinopia refresh` updates the map after new commits and only describes files that changed.
+
+What leaves your machine: only `describe` sends code to Claude, through your own `claude` CLI and login, as Claude Code does. Maps stay in `~/.local/share/sinopia/maps`. `serve` binds 127.0.0.1 unless you pass `--host`.
+
 ## Commands
 
 ```bash

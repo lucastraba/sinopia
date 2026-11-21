@@ -33,7 +33,7 @@ export interface DescribeContext {
     overview: string;
 }
 export declare const systemPrompt: (context: DescribeContext) => string;
-/** Plain-language defaults for a personal repo, where Lucas is the reader. */
+/** Plain-language defaults for a repo without its own writing rules: the people who work on it read the map. */
 export declare const personalRules: (name: string) => RulesOptions;
 export declare const filesPrompt: (part: Part, files: {
     file: FileNode;

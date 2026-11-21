@@ -12,11 +12,11 @@ Every item gets three fields:
 
 Say what the code does today, not what its name suggests. If something is a placeholder or only used in one place, say so. Only claim who uses a thing when the facts given show it. Never invent examples or values that aren't in the code. Don't start with "This file" or "This component", don't hedge, don't repeat the title, and don't use em dashes.`;
 export const systemPrompt = (context) => `${writingRules(context.rules)}\n\n${context.backgroundLabel}\n\n${context.background}`;
-/** Plain-language defaults for a personal repo, where Lucas is the reader. */
+/** Plain-language defaults for a repo without its own writing rules: the people who work on it read the map. */
 export const personalRules = (name) => ({
     mapName: `the ${name} map`,
-    subject: `${name}, one of Lucas's personal projects`,
-    readers: 'Lucas reads it, often on his phone, to remember how the project fits together; the plain view is the default and the developer view is a toggle away.',
+    subject: name,
+    readers: 'The people who work on the project read it, often on a phone, to see or remember how it fits together; the plain view is the default and the developer view is a toggle away.',
     plainReader: 'someone who knows what the project is for but has not read its code',
     ownWords: "the project's own words",
     user: 'the person using the project',

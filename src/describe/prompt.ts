@@ -56,11 +56,11 @@ export interface DescribeContext {
 export const systemPrompt = (context: DescribeContext): string =>
   `${writingRules(context.rules)}\n\n${context.backgroundLabel}\n\n${context.background}`;
 
-/** Plain-language defaults for a personal repo, where Lucas is the reader. */
+/** Plain-language defaults for a repo without its own writing rules: the people who work on it read the map. */
 export const personalRules = (name: string): RulesOptions => ({
   mapName: `the ${name} map`,
-  subject: `${name}, one of Lucas's personal projects`,
-  readers: 'Lucas reads it, often on his phone, to remember how the project fits together; the plain view is the default and the developer view is a toggle away.',
+  subject: name,
+  readers: 'The people who work on the project read it, often on a phone, to see or remember how it fits together; the plain view is the default and the developer view is a toggle away.',
   plainReader: 'someone who knows what the project is for but has not read its code',
   ownWords: "the project's own words",
   user: 'the person using the project',
