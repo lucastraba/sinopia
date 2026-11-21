@@ -7,8 +7,16 @@
       content="width=device-width, initial-scale=1.0, maximum-scale=1.0"
     />
     <title>Map</title>
-    <script type="module" crossorigin src="./assets/index-uKeMNUGo.js"></script>
-    <link rel="stylesheet" crossorigin href="./assets/index-uRUMJpeB.css">
+    <script>
+      // Before the first paint, so a dark page doesn't flash white. theme.ts takes over after.
+      try {
+        var choice = localStorage.getItem('sinopia-theme');
+        if (choice === 'dark' || (choice !== 'light' && matchMedia('(prefers-color-scheme: dark)').matches))
+          document.documentElement.classList.add('dark');
+      } catch (e) {}
+    </script>
+    <script type="module" crossorigin src="./assets/index-DDXcMOmf.js"></script>
+    <link rel="stylesheet" crossorigin href="./assets/index-BU_ejwEy.css">
   </head>
   <body class="bg-slate-50">
     <div id="app"></div>

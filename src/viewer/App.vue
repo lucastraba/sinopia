@@ -3,6 +3,7 @@ import { computed, onMounted, ref, shallowRef, watch } from 'vue';
 import ChangesPanel from './components/ChangesPanel.vue';
 import DetailPanel from './components/DetailPanel.vue';
 import GapsPanel from './components/GapsPanel.vue';
+import { cycleTheme, theme } from './theme';
 import MapCanvas from './components/MapCanvas.vue';
 import SearchBox from './components/SearchBox.vue';
 import { useMapData } from './composables/useMapData';
@@ -240,6 +241,15 @@ const showPanel = computed(
           >
             ({{ loudGaps }} to fix)</span
           >
+        </button>
+        <button
+          type="button"
+          data-test-id="map-theme"
+          class="rounded-md border border-slate-300 bg-white px-2.5 py-1 text-xs text-slate-700"
+          :title="`Theme: ${theme}. Tap to switch.`"
+          @click="cycleTheme"
+        >
+          {{ { auto: '◐ Auto', light: '☀ Light', dark: '☾ Dark' }[theme] }}
         </button>
       </div>
       <div v-if="index" class="w-full md:order-none md:ml-4 md:w-80">

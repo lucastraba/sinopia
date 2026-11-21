@@ -1,4 +1,4 @@
-import { reactive, type Ref } from 'vue';
+import { reactive, ref, type Ref } from 'vue';
 
 interface Transform {
   x: number;
@@ -22,6 +22,8 @@ export const usePanZoom = (container: Ref<HTMLElement | null>) => {
   const pointers = new Map<number, { x: number; y: number }>();
   let pinchDistance = 0;
   let moved = false;
+  /** A finger or the mouse is down: the map layer is kept composited while it is. */
+  const gesturing = ref(false);
 
   const zoomAt = (clientX: number, clientY: number, factor: number) => {
     const rect = container.value?.getBoundingClientRect();
@@ -43,6 +45,7 @@ export const usePanZoom = (container: Ref<HTMLElement | null>) => {
   const onPointerDown = (event: PointerEvent) => {
     pointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
     moved = false;
+    gesturing.value = true;
     if (pointers.size === 2) pinchDistance = distance();
   };
 
@@ -73,6 +76,7 @@ export const usePanZoom = (container: Ref<HTMLElement | null>) => {
   const onPointerUp = (event: PointerEvent) => {
     pointers.delete(event.pointerId);
     if (pointers.size < 2) pinchDistance = 0;
+    if (pointers.size === 0) gesturing.value = false;
   };
 
   const onWheel = (event: WheelEvent) => {
@@ -137,5 +141,6 @@ export const usePanZoom = (container: Ref<HTMLElement | null>) => {
     centerOn,
     wasDrag,
     zoomAt,
+    gesturing,
   };
 };

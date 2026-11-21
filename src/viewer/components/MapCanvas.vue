@@ -30,6 +30,7 @@ const {
   centerOn,
   wasDrag,
   zoomAt,
+  gesturing,
 } = usePanZoom(container);
 
 const TONES: Record<Tone, string> = {
@@ -142,24 +143,42 @@ const zoom = (factor: number) => {
     @pointerup="onPointerUp"
     @pointercancel="onPointerUp"
     @wheel="onWheel"
+    @click="onBackgroundClick"
   >
-    <svg class="h-full w-full" @click.self="onBackgroundClick">
-      <defs>
-        <marker
-          id="arrow"
-          viewBox="0 0 10 10"
-          refX="9"
-          refY="5"
-          markerWidth="6"
-          markerHeight="6"
-          orient="auto-start-reverse"
-        >
-          <path d="M0,0 L10,5 L0,10 z" class="fill-slate-400" />
-        </marker>
-      </defs>
-      <g
-        :transform="`translate(${transform.x},${transform.y}) scale(${transform.scale})`"
+    <!--
+      Edges, groups and cards share one layer, moved by a single CSS transform.
+      WebKit (iPhone Safari) handles this badly in two ways otherwise: HTML in
+      <foreignObject> ignores an ancestor SVG transform (cards stayed put while
+      edges panned), and an SVG redrawn through its transform attribute on every
+      frame leaves trails of old edges, arrowheads and group borders. As one
+      composited layer, a pan only moves pixels; will-change is set only during
+      a gesture, so the layer is redrawn sharp at the new zoom once it ends.
+    -->
+    <div
+      class="pointer-events-none absolute top-0 left-0 origin-top-left"
+      :style="{
+        transform: `translate(${transform.x}px, ${transform.y}px) scale(${transform.scale})`,
+        willChange: gesturing ? 'transform' : 'auto',
+      }"
+    >
+      <svg
+        class="absolute top-0 left-0 overflow-visible"
+        :width="placed?.width ?? 0"
+        :height="placed?.height ?? 0"
       >
+        <defs>
+          <marker
+            id="arrow"
+            viewBox="0 0 10 10"
+            refX="9"
+            refY="5"
+            markerWidth="6"
+            markerHeight="6"
+            orient="auto-start-reverse"
+          >
+            <path d="M0,0 L10,5 L0,10 z" class="fill-slate-400" />
+          </marker>
+        </defs>
         <g v-for="group in placed?.groups ?? []" :key="group.id">
           <rect
             :x="group.x"
@@ -168,7 +187,6 @@ const zoom = (factor: number) => {
             :height="group.height"
             rx="12"
             class="fill-white stroke-slate-200"
-            @click="onBackgroundClick"
           />
           <text
             :x="group.x + 16"
@@ -190,19 +208,7 @@ const zoom = (factor: number) => {
           :stroke-dasharray="edge.dashed ? '6 4' : undefined"
           marker-end="url(#arrow)"
         />
-      </g>
-    </svg>
-    <!--
-      Cards are HTML in their own layer, moved with a CSS transform that matches
-      the SVG one. In WebKit (iPhone Safari) HTML inside <foreignObject> ignores
-      the ancestor SVG transform, so cards stayed put while edges panned.
-    -->
-    <div
-      class="pointer-events-none absolute top-0 left-0 origin-top-left"
-      :style="{
-        transform: `translate(${transform.x}px, ${transform.y}px) scale(${transform.scale})`,
-      }"
-    >
+      </svg>
       <button
         v-for="node in placed?.nodes ?? []"
         :key="node.id"
@@ -258,7 +264,8 @@ const zoom = (factor: number) => {
         type="button"
         :data-test-id="`map-${control.id}`"
         class="h-9 min-w-9 rounded-md border border-slate-300 bg-white px-2 text-sm text-slate-700 shadow-sm"
-        @click="control.action"
+        @pointerdown.stop
+        @click.stop="control.action"
       >
         {{ control.label }}
       </button>

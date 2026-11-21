@@ -41,7 +41,9 @@ const indexPage = (maps) => {
         .map(({ name, graph, described }) => `<li><a href="p/${encodeURIComponent(name)}/">${escape(name)}</a><span>${graph.parts.length} parts, ${graph.files.length} files${described ? '' : ', not described yet'} · ${escape(graph.source.sha?.slice(0, 9) ?? '')} · ${escape(graph.generatedAt.slice(0, 16).replace('T', ' '))}</span></li>`)
         .join('');
     return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Sinopia maps</title>
-<style>body{font:16px/1.5 system-ui,sans-serif;margin:0;padding:24px 16px;background:#f8fafc;color:#0f172a}h1{font-size:20px;margin:0 0 16px}ul{list-style:none;padding:0;margin:0;max-width:640px}li{background:#fff;border:1px solid #e2e8f0;border-radius:8px;margin-bottom:8px;padding:12px 14px}a{color:#1d4ed8;font-weight:600;text-decoration:none;display:block}span{color:#64748b;font-size:13px}</style></head>
+<script>try{var c=localStorage.getItem('sinopia-theme');if(c==='dark'||(c!=='light'&&matchMedia('(prefers-color-scheme: dark)').matches))document.documentElement.classList.add('dark')}catch(e){}</script>
+<style>:root{--bg:#f8fafc;--fg:#0f172a;--card:#fff;--line:#e2e8f0;--link:#1d4ed8;--muted:#64748b}html.dark{color-scheme:dark;--bg:#020617;--fg:#f1f5f9;--card:#0f172a;--line:#1e293b;--link:#60a5fa;--muted:#94a3b8}
+body{font:16px/1.5 system-ui,sans-serif;margin:0;padding:24px 16px;background:var(--bg);color:var(--fg)}h1{font-size:20px;margin:0 0 16px}ul{list-style:none;padding:0;margin:0;max-width:640px}li{background:var(--card);border:1px solid var(--line);border-radius:8px;margin-bottom:8px;padding:12px 14px}a{color:var(--link);font-weight:600;text-decoration:none;display:block}span{color:var(--muted);font-size:13px}</style></head>
 <body><h1>Sinopia maps</h1><ul>${rows || '<li>No maps yet.</li>'}</ul></body></html>`;
 };
 /**
