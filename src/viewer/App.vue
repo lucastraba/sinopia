@@ -133,6 +133,14 @@ const onPick = (result: { kind: SelectionKind | 'screen'; id: string }) => {
   select({ kind: result.kind, id: result.id });
 };
 
+/** One level up from a part: the overview, with the part still selected so it's easy to find. */
+const goUp = () => {
+  const part = state.part;
+  state.part = null;
+  state.selection = part ? { kind: 'part', id: part } : null;
+  panel.value = 'detail';
+};
+
 const goHome = () => {
   state.view = 'map';
   state.part = null;
@@ -299,6 +307,15 @@ const showPanel = computed(
         v-if="state.view === 'map' || route"
         class="relative min-w-0 flex-1"
       >
+        <button
+          v-if="state.view === 'map' && state.part"
+          type="button"
+          data-test-id="map-up"
+          class="absolute top-2 left-2 z-10 rounded-md border border-slate-300 bg-white/90 px-3 py-1.5 text-sm text-slate-700 shadow-sm"
+          @click="goUp"
+        >
+          ‹ All parts
+        </button>
         <div
           v-if="state.view === 'screens' && route"
           class="absolute top-2 left-2 z-10 flex items-center gap-2 rounded-md border border-slate-200 bg-white/90 px-2 py-1 text-xs"

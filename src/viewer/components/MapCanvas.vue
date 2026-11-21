@@ -83,11 +83,27 @@ const pathOf = (points: Point[], curved: boolean): string => {
   return `M${first.x},${first.y} ${rest.map((point) => `L${point.x},${point.y}`).join(' ')}`;
 };
 
-const edgeClass = (from: string, to: string, highlight: boolean) => {
-  if (props.showChanges && highlight) return 'stroke-orange-500';
-  if (from === props.selectedId) return 'stroke-blue-600';
-  if (to === props.selectedId) return 'stroke-fuchsia-600';
-  return 'stroke-slate-300';
+type EdgeTone = 'changed' | 'outgoing' | 'incoming' | 'plain';
+
+const ARROWS: Record<EdgeTone, string> = {
+  changed: 'fill-orange-500',
+  outgoing: 'fill-blue-600',
+  incoming: 'fill-fuchsia-600',
+  plain: 'fill-slate-400',
+};
+
+const STROKES: Record<EdgeTone, string> = {
+  changed: 'stroke-orange-500',
+  outgoing: 'stroke-blue-600',
+  incoming: 'stroke-fuchsia-600',
+  plain: 'stroke-slate-300',
+};
+
+const edgeTone = (from: string, to: string, highlight: boolean): EdgeTone => {
+  if (props.showChanges && highlight) return 'changed';
+  if (from === props.selectedId) return 'outgoing';
+  if (to === props.selectedId) return 'incoming';
+  return 'plain';
 };
 
 const nodeOpacity = (id: string) =>
@@ -166,9 +182,12 @@ const zoom = (factor: number) => {
         :width="placed?.width ?? 0"
         :height="placed?.height ?? 0"
       >
+        <!-- One arrowhead per edge color, so a highlighted edge's head matches its line. -->
         <defs>
           <marker
-            id="arrow"
+            v-for="(fill, tone) in ARROWS"
+            :id="`arrow-${tone}`"
+            :key="tone"
             viewBox="0 0 10 10"
             refX="9"
             refY="5"
@@ -176,7 +195,7 @@ const zoom = (factor: number) => {
             markerHeight="6"
             orient="auto-start-reverse"
           >
-            <path d="M0,0 L10,5 L0,10 z" class="fill-slate-400" />
+            <path d="M0,0 L10,5 L0,10 z" :class="fill" />
           </marker>
         </defs>
         <g v-for="group in placed?.groups ?? []" :key="group.id">
@@ -201,12 +220,12 @@ const zoom = (factor: number) => {
           :key="edge.id"
           :d="pathOf(edge.points, edgesOnSelection)"
           fill="none"
-          :class="edgeClass(edge.from, edge.to, edge.highlight)"
+          :class="STROKES[edgeTone(edge.from, edge.to, edge.highlight)]"
           :stroke-width="
             edge.from === selectedId || edge.to === selectedId ? 2 : 1.2
           "
           :stroke-dasharray="edge.dashed ? '6 4' : undefined"
-          marker-end="url(#arrow)"
+          :marker-end="`url(#arrow-${edgeTone(edge.from, edge.to, edge.highlight)})`"
         />
       </svg>
       <button
