@@ -1,0 +1,18 @@
+{
+  "name": "sinopia",
+  "owner": {
+    "name": "Lucas Traba",
+    "url": "https://github.com/lucastraba"
+  },
+  "metadata": {
+    "description": "Sinopia: an architecture map of a codebase you can read on a phone, with an adapter your agent writes for your stack."
+  },
+  "plugins": [
+    {
+      "name": "sinopia",
+      "source": "./",
+      "description": "Make, refresh, diff and serve a map of a codebase (structure from the code, plain-language descriptions from Claude), and write the project adapter that teaches it your stack's links.",
+      "category": "productivity"
+    }
+  ]
+}

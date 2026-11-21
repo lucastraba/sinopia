@@ -1,0 +1,13 @@
+{
+  "name": "sinopia",
+  "version": "0.2.0",
+  "description": "An architecture map of a codebase: parts, files and the links between them from the code, plain-language descriptions from Claude, a viewer that works on a phone. Two skills: sinopia (make, update, diff, serve and question a map) and sinopia-adapter (write, repair or upgrade a project's adapter).",
+  "author": {
+    "name": "Lucas Traba",
+    "url": "https://github.com/lucastraba"
+  },
+  "homepage": "https://github.com/lucastraba/sinopia",
+  "repository": "https://github.com/lucastraba/sinopia",
+  "license": "UNLICENSED",
+  "keywords": ["codebase", "architecture", "map", "visualization", "onboarding"]
+}
