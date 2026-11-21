@@ -21,7 +21,7 @@
     "viewer-dist"
   ],
   "scripts": {
-    "build": "rm -rf dist viewer-dist && tsc -p tsconfig.build.json && vite build",
+    "build": "rm -rf dist viewer-dist && tsc -p tsconfig.build.json && chmod +x dist/bin.js && vite build",
     "check": "tsc -p tsconfig.json && vue-tsc --noEmit -p src/viewer/tsconfig.json && vitest run && pnpm build && git diff --exit-code -- dist viewer-dist",
     "test": "vitest run",
     "viewer:dev": "vite"
