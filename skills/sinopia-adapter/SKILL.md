@@ -7,7 +7,7 @@ description: Write, repair or upgrade a project's Sinopia adapter (.sinopia/adap
 
 Sinopia maps a repo as parts, files and links. Its generic adapter only sees folders and JS/TS imports. Many codebases connect through things imports don't show: a client calls a server procedure by name, a component sends a socket event that a handler three folders away receives, a Python process reads what a Node process publishes. A project adapter finds those links in the code and adds them to the map. Your job is to write that adapter, or repair or upgrade the one the repo has, and to prove with `sinopia check` that it's better than the generic one.
 
-You need the `sinopia` CLI (`sinopia help`; install with `npm install -g github:lucastraba/sinopia` if it's missing) and a repo. Run every command from the repo root.
+You need the `sinopia` CLI (`sinopia help`; install with `npm install -g --install-links github:lucastraba/sinopia` if it's missing) and a repo. Run every command from the repo root.
 
 ## 1. Read the interface
 

@@ -10,7 +10,7 @@ Sinopia builds a map of a repo. The structure (parts, files, the links between t
 The commands below assume the `sinopia` CLI. Check with `sinopia help`. If it's missing, install it (Node 22 or newer, git):
 
 ```bash
-npm install -g github:lucastraba/sinopia
+npm install -g --install-links github:lucastraba/sinopia
 ```
 
 `describe` also needs the `claude` CLI, logged in. If `claude` isn't on PATH, set `SINOPIA_CLAUDE` to its full path.

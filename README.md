@@ -8,6 +8,23 @@ Ownership: parts of the core were first written in Helu's frontend repo; Helu co
 
 Each repo can carry its own adapter (`.sinopia/adapter.mjs`), written by its developers or their agent, for the links a generic scan can't see. Sinopia ships the core, two generic adapters and the instructions for writing one: [`docs/adapters.md`](docs/adapters.md).
 
+## Install
+
+The CLI (Node 22 or newer, git; `describe` also needs the `claude` CLI):
+
+```bash
+npm install -g --install-links github:lucastraba/sinopia
+```
+
+The Claude Code plugin, with the `sinopia` and `sinopia-adapter` skills:
+
+```
+/plugin marketplace add lucastraba/sinopia
+/plugin install sinopia@sinopia
+```
+
+On Claude Code 2.1.275 or later, `/plugin install sinopia --marketplace lucastraba/sinopia` does both. The repo is private for now, so both need GitHub access to it.
+
 ## Commands
 
 ```bash
