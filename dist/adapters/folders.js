@@ -1,0 +1,141 @@
+import { basename, join } from 'node:path';
+import { CODE_FILE, cruiseWithoutConfig } from '../cruise.js';
+import { personalRules } from '../describe/prompt.js';
+import { ensureDir } from '../repo.js';
+import { validateGraph } from '../validate.js';
+import { folderPartOf, listFiles, packageDirsOf, readmeOf, readText, sha1 } from './files.js';
+const MAX_BYTES = 200_000;
+/** Text files worth describing in a repo without a code structure the map understands. */
+const TEXT_FILE = /\.(lua|sh|bash|zsh|fish|py|rb|go|rs|el|vim|nix|ps1|js|mjs|cjs|ts|tsx|jsx|vue|svelte|md|txt|toml|ya?ml|ini|conf|cfg|service|timer|socket|json|sql|html|css)$/i;
+const SKIPPED_FILE = /(^|\/)(package-lock\.json|pnpm-lock\.yaml|yarn\.lock|bun\.lockb?|Cargo\.lock|poetry\.lock|uv\.lock)$/;
+export const fileKindOf = (path) => {
+    const name = path.split('/').pop() ?? path;
+    if (/(\.|_)(spec|test)\.\w+$/.test(name) || /^test_.*\.py$/.test(name) || /(^|\/)(__tests__|tests?)\//.test(path)) {
+        return 'test';
+    }
+    if (name.endsWith('.d.ts') || /(^|\/)generated\//.test(path))
+        return 'generated';
+    if (/\.(md|txt)$/i.test(name))
+        return 'doc';
+    if (/\.(json|ya?ml|toml|ini|conf|cfg|service|timer|socket)$/i.test(name) || /\.config\.\w+$/.test(name)) {
+        return 'config';
+    }
+    if (/\.(vue|svelte|tsx|jsx)$/.test(name))
+        return 'component';
+    if (/\.(types?)\.\w+$/.test(name))
+        return 'type';
+    if (/\.(sh|bash|zsh|fish|lua|py|rb|ps1)$/i.test(name))
+        return 'script';
+    return 'other';
+};
+const meta = (name, hasLinks) => ({
+    title: `${name} map`,
+    srcDir: '',
+    sourceLabel: 'the repo',
+    groups: [
+        { kind: 'package', label: 'Packages' },
+        { kind: 'folder', label: 'Folders' },
+        { kind: 'root', label: 'Top level' },
+    ],
+    groupFlow: [
+        ['package', 'folder'],
+        ['folder', 'root'],
+    ],
+    servicesLabel: 'Services',
+    operationsLabel: 'Server calls',
+    boundary: null,
+    library: null,
+    hasLinks,
+});
+/**
+ * Maps any repo by its folders: each workspace package, each folder under
+ * src/, or each top-level folder is a part. The 'js' mode adds the imports
+ * between JS/TS files; the 'plain' mode, for Lua, shell and Python repos,
+ * only lists files and leaves the rest to the descriptions.
+ */
+export const folderAdapter = (repo, { mode, name = basename(repo) }) => {
+    const packageDirs = packageDirsOf(listFiles(repo));
+    const include = (path) => !SKIPPED_FILE.test(path) && (mode === 'js' ? CODE_FILE.test(path) : TEXT_FILE.test(path));
+    const scan = async ({ root, artifacts, source }) => {
+        const paths = listFiles(root).filter(include);
+        const gaps = [];
+        let imports = null;
+        if (mode === 'js' && paths.length > 0) {
+            try {
+                imports = cruiseWithoutConfig(root, ['.'], ensureDir(join(artifacts, 'scratch')));
+            }
+            catch (error) {
+                gaps.push({ kind: 'imports-failed', level: 'warning', file: null, detail: `dependency-cruiser failed, so the map has no links: ${String(error).slice(0, 300)}` });
+            }
+        }
+        const parts = new Map();
+        const files = [];
+        const ids = new Set(paths);
+        for (const path of paths) {
+            const content = readText(join(root, path), MAX_BYTES);
+            if (content === null)
+                continue;
+            const part = folderPartOf(path, packageDirs);
+            const entry = parts.get(part.id) ?? { ...part, files: [] };
+            entry.files.push(path);
+            parts.set(part.id, entry);
+            const fileImports = imports?.byFile.get(path);
+            for (const specifier of fileImports?.unresolved ?? []) {
+                gaps.push({ kind: 'unresolved-import', level: 'warning', file: path, detail: `import '${specifier}' does not resolve to a file` });
+            }
+            files.push({
+                id: path,
+                part: part.id,
+                kind: fileKindOf(path),
+                lines: content.split('\n').length,
+                hash: sha1(content),
+                imports: (fileImports?.imports ?? []).filter((target) => ids.has(target)),
+                libraries: fileImports?.libraries ?? [],
+                components: [],
+                operations: [],
+                flags: [],
+                registeredAs: null,
+            });
+        }
+        const graph = {
+            version: 1,
+            generatedAt: new Date().toISOString(),
+            meta: meta(name, mode === 'js'),
+            source,
+            backend: null,
+            parts: [...parts.values()].sort((a, b) => a.id.localeCompare(b.id)),
+            files,
+            operations: [],
+            routes: [],
+            flags: [],
+            subgraphs: [],
+            cycles: imports?.cycles ?? [],
+            gaps,
+        };
+        graph.gaps.push(...validateGraph(graph, files.length));
+        return graph;
+    };
+    return {
+        name: mode,
+        scan,
+        partOf: (path) => folderPartOf(path, packageDirs).id,
+        snapshotPaths: null,
+        describeContext: async ({ repo: root }) => ({
+            rules: personalRules(name),
+            backgroundLabel: "The project's README:",
+            background: readmeOf(root) || '(no README)',
+            overviewLabel: 'README',
+            overview: '',
+        }),
+    };
+};
+const JS = /\.(ts|tsx|mts|cts|js|jsx|mjs|cjs|vue|svelte)$/;
+const OTHER_CODE = /\.(lua|sh|bash|zsh|fish|py|rb|go|rs|el|nix|ps1)$/;
+/** 'js' when most of the code is JS/TS and there is a package.json, else 'plain'. */
+export const chooseMode = (files) => {
+    const js = files.filter((path) => JS.test(path) && !path.endsWith('.d.ts')).length;
+    const other = files.filter((path) => OTHER_CODE.test(path)).length;
+    const hasPackage = files.some((path) => /(^|\/)package\.json$/.test(path));
+    return hasPackage && js >= 3 && js >= other ? 'js' : 'plain';
+};
+export const autoAdapter = (repo, name) => folderAdapter(repo, { mode: chooseMode(listFiles(repo)), name });

@@ -1,0 +1,48 @@
+{
+  "name": "sinopia",
+  "version": "0.1.0",
+  "private": true,
+  "description": "An architecture map of a code base: structure from the code, plain-language descriptions from Claude",
+  "license": "UNLICENSED",
+  "type": "module",
+  "bin": {
+    "sinopia": "dist/bin.js"
+  },
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "viewer-dist"
+  ],
+  "scripts": {
+    "build": "rm -rf dist viewer-dist && tsc -p tsconfig.build.json && vite build",
+    "check": "tsc -p tsconfig.json && vue-tsc --noEmit -p src/viewer/tsconfig.json && vitest run && pnpm build && git diff --exit-code -- dist viewer-dist",
+    "test": "vitest run",
+    "viewer:dev": "vite"
+  },
+  "dependencies": {
+    "dependency-cruiser": "^18.0.0",
+    "typescript": "^6.0.3"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.3.2",
+    "@types/node": "^26.0.1",
+    "@vitejs/plugin-vue": "^6.0.7",
+    "elkjs": "^0.12.1",
+    "tailwindcss": "^4.3.2",
+    "tsx": "^4.23.15",
+    "vite": "^8.1.1",
+    "vitest": "^5.0.5",
+    "vue": "^3.5.39",
+    "vue-tsc": "3.3.5"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}
