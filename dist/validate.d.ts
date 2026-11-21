@@ -5,5 +5,11 @@ import type { Gap, Graph } from './model.js';
  * reaches a subgraph. Anything that fails becomes a gap, so a scan never hides
  * what it couldn't place.
  */
-export declare const validateGraph: (graph: Graph, scannedFileCount: number) => Gap[];
+/**
+ * `scannedFileCount` is how many files the adapter read, when it knows: then
+ * parts plus unpartitioned files must add up to it. Without it (the core's
+ * own run after every scan) the check is that every file node sits in a part;
+ * parts may also hold files without a node, such as GraphQL documents.
+ */
+export declare const validateGraph: (graph: Graph, scannedFileCount?: number) => Gap[];
 export declare const summarizeGaps: (gaps: Gap[]) => string[];

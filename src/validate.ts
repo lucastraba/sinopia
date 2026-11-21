@@ -8,7 +8,13 @@ import type { Gap, Graph } from './model.js';
  * reaches a subgraph. Anything that fails becomes a gap, so a scan never hides
  * what it couldn't place.
  */
-export const validateGraph = (graph: Graph, scannedFileCount: number): Gap[] => {
+/**
+ * `scannedFileCount` is how many files the adapter read, when it knows: then
+ * parts plus unpartitioned files must add up to it. Without it (the core's
+ * own run after every scan) the check is that every file node sits in a part;
+ * parts may also hold files without a node, such as GraphQL documents.
+ */
+export const validateGraph = (graph: Graph, scannedFileCount?: number): Gap[] => {
   const gaps: Gap[] = [];
   const fileIds = new Set(graph.files.map((file) => file.id));
   const unpartitioned = graph.gaps.filter(
@@ -30,7 +36,18 @@ export const validateGraph = (graph: Graph, scannedFileCount: number): Gap[] => 
       });
     }
   }
-  if (membership.size + unpartitioned !== scannedFileCount) {
+  if (scannedFileCount === undefined) {
+    for (const file of graph.files) {
+      if (!membership.has(file.id)) {
+        gaps.push({
+          kind: 'unpartitioned-file',
+          level: 'error',
+          file: file.id,
+          detail: `${file.id} is in no part`,
+        });
+      }
+    }
+  } else if (membership.size + unpartitioned !== scannedFileCount) {
     gaps.push({
       kind: 'unpartitioned-file',
       level: 'error',

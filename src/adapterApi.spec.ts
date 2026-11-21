@@ -40,7 +40,7 @@ const JS_REPO = {
 const scan = async (repo: string, choice = 'auto') => {
   const { adapter } = await pickAdapter(choice, repo, 'demo');
   const graph = await adapter.scan({ repo, root: repo, artifacts: join(repo, '.map'), source: { label: 'test', sha: null } });
-  graph.gaps.push(...validateGraph(graph, graph.files.length));
+  graph.gaps.push(...validateGraph(graph));
   return graph;
 };
 
@@ -116,5 +116,24 @@ describe('coverageOf', () => {
     expect(coverage.codeFiles).toBe(5);
     expect(coverage.tests).toBe(1);
     expect(coverage.passes).toBe(true);
+  });
+});
+
+describe('validateGraph without a scanned count', () => {
+  const node = (id: string, part: string) => ({
+    id, part, kind: 'other' as const, lines: 1, hash: 'h',
+    imports: [], libraries: [], components: [], operations: [], flags: [], registeredAs: null,
+  });
+  const graph = (files: ReturnType<typeof node>[], parts: { id: string; files: string[] }[]) =>
+    ({ files, parts: parts.map((part) => ({ ...part, kind: 'folder', name: part.id, dir: part.id })), gaps: [], operations: [], routes: [] }) as never;
+
+  it('accepts part members without a file node, like GraphQL documents', () => {
+    const gaps = validateGraph(graph([node('src/a.ts', 'src')], [{ id: 'src', files: ['src/a.ts', 'src/a.graphql'] }]));
+    expect(gaps).toEqual([]);
+  });
+
+  it('reports a file node that no part holds', () => {
+    const gaps = validateGraph(graph([node('src/a.ts', 'src'), node('lost.ts', 'x')], [{ id: 'src', files: ['src/a.ts'] }]));
+    expect(gaps.map((gap) => gap.detail)).toEqual(['lost.ts is in no part']);
   });
 });

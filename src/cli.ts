@@ -56,7 +56,7 @@ const scanAt = async (options: CliOptions, ref: string | null): Promise<Graph> =
   const graph = await adapterScan(options, ref);
   // A plain-mode adapter that adds its own links has links after all.
   if (graph.files.some((file) => (file.links?.length ?? 0) > 0)) graph.meta.hasLinks = true;
-  graph.gaps.push(...validateGraph(graph, graph.files.length));
+  graph.gaps.push(...validateGraph(graph));
   return graph;
 };
 

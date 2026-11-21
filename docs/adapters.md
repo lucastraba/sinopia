@@ -11,7 +11,7 @@ The current version is 1. Every adapter declares the version it was written for 
 - Generic: `--adapter js` reads folders as parts and follows JS/TS imports with dependency-cruiser; shell, Python and Lua files and shebang scripts are listed without links. `--adapter plain` lists folders and files with no links, for repos in other languages. `--adapter auto` (the default) picks `js` when most code is JS/TS and there's a `package.json`, else `plain`.
 - A project's own: `.sinopia/adapter.mjs` in the repo. Under `--adapter auto`, sinopia uses it whenever it exists, for `scan`, `check`, `describe`, `diff` and `refresh`. `sinopia adapter init` writes one that starts from the generic adapter, so the map works at once and tailoring is an upgrade. Commit it with the repo.
 - A file elsewhere: `--adapter path/to/adapter.mjs`.
-- A package with its own CLI: a project can also depend on sinopia and call `runCli({ adapter, repo, out, argv, command, diffBase })` from its own command, as Helu's frontend does (below).
+- A package with its own CLI: a project can also depend on sinopia and call `runCli({ adapter, repo, out, argv, command, diffBase })` from its own command, as Helu's frontend does (below). If the package already has a script named like one of sinopia's commands (a `check` script that runs lint, say), that script wins under the package manager; call the CLI file directly for sinopia's version.
 
 ## The module
 
@@ -38,12 +38,12 @@ The default export takes `sinopia`, the package's API, and `{ repo, name }` (the
 
 | Field | What it is |
 |---|---|
-| `interfaceVersion` | The interface version the adapter implements: `1`. |
+| `interfaceVersion` | The interface version the adapter implements, as a literal number: `1`. Don't use `ADAPTER_INTERFACE_VERSION` here: the adapter would then claim whatever version the installed sinopia implements, and a version bump would never be noticed. |
 | `name` | Shown in `check` and in errors. |
 | `scan(input)` | Builds the graph (below). Async. |
 | `partOf(path)` | The part id a repo-relative path belongs to, or null. `diff` uses it for changed files neither graph holds (deleted files, files outside the scan). |
 | `snapshotPaths` | The paths `diff` exports with `git archive` to scan an older commit, or `null` for the whole tree. List only what the scan reads, for speed on big repos. |
-| `describeContext(input)` | Background for `describe`: `{ rules, backgroundLabel, background, overviewLabel, overview }`. `rules` is the writing guide (`sinopia.personalRules(name)` for a generic one, or `sinopia.writingRules({...})` with the project's words); `background` is usually the README. Spread `base` to keep the generic one. |
+| `describeContext(input)` | Background for `describe`: `{ rules, backgroundLabel, background, overviewLabel, overview }`. `rules` is a `RulesOptions` object that sinopia turns into the writing guide: `sinopia.personalRules(name)` for the generic one, or your own object with the project's words (map name, readers, the nouns to keep, the code words to avoid in plain text); `background` is usually the README. Spread `base` to keep the generic one. |
 
 `scan(input)` gets `{ repo, root, artifacts, source }`:
 
@@ -68,7 +68,7 @@ The full model, with comments, is `src/model.ts`. What an adapter fills:
 1. Don't call `validateGraph` yourself; sinopia runs it on every scan.
 2. Every link target must be a file id in `graph.files`. A link to anything else is an error.
 3. Read from `input.root`.
-4. Keep `scan` deterministic and fast: no network, no model calls, no clock in the output except `generatedAt`. Sinopia's only model call is `describe`.
+4. Keep `scan` deterministic and fast: no model calls, no clock in the output except `generatedAt`. Sinopia's only model call is `describe`. Avoid the network; when the map needs another repo (a backend schema, say), fetch it by commit, cache it by that commit, fall back to the cache when offline, and record the commit (`graph.backend`) so the map says what it was built from.
 5. Prefer finding links in the code that declares them (a router definition, a client call, an event name) over guessing from file names. When a call can't be matched, add a gap instead of a guess.
 
 ## Checks and coverage
@@ -91,18 +91,20 @@ The coverage, the same numbers for the same code every time:
 
 ## Worked example: Helu's frontend
 
-Helu's frontend is a Vue 3 monorepo with a GraphQL backend of several services. Its adapter lives in the frontend repo (`packages/tools/map`), depends on sinopia by commit, and calls `runCli` from its own `pnpm map` command. It's the reference for an adapter that goes far beyond the generic one. This summary is written from what it puts into the graph; the code is the authority.
+Helu's frontend is a Vue 3 monorepo with a federated GraphQL backend in another repo. Its adapter lives in the frontend repo (`packages/tools/map`), depends on sinopia by commit, and calls `runCli` from its own CLI, so its commands are `pnpm map scan|describe|diff|serve`. It maps the main app (`packages/apps/main/src`) and goes far beyond the generic adapter. This summary was checked against its code on 2026-11-21; the code is the authority.
 
-- Parts from feature folders: The main app's `src/features/<name>` folders are parts of kind `feature`, proof-of-concept folders are `poc`, and app shell and core folders get their own kinds. `meta.groups` gives each kind a heading, and `meta.boundary` marks POC parts as something production code must not import, so `diff` flags a new link into one.
-- Imports with the repo's own resolver: `sinopia.cruiseWithRepoConfig` runs dependency-cruiser with the frontend's own config, so path aliases resolve. Imports of the design system package become `libraries`, not links.
-- SFC templates: It parses each `.vue` template and turns the tags into `components`: a tag that matches an import resolves to that file, a design system tag to the library (`meta.library` lets `diff` map a design system change to the parts using it), and components opened by name at runtime get `byName: true`, with `registeredAs` on the target.
-- Routes: It reads the router definitions into `routes`, with the component each mounts, the entitlement it needs (`feature`), the feature flags its guards check, and redirects. The "Screens" view and the plain descriptions use them.
-- GraphQL operations: Each query, mutation and subscription document becomes an `operation`, attached to the file that calls it through its generated composable. Its root fields are resolved against the federated schema.
-- Backend subgraphs: It reads the schema from the backend repo at a known commit (`graph.backend`), so each operation knows which services answer its root fields (`subgraphs`) and which serve any field it selects (`allSubgraphs`). The overview draws parts calling services.
-- Its own gaps: An operation whose composable is missing, a route component that doesn't resolve, a field the schema doesn't know: each becomes a gap with the file, so the map never hides what it couldn't follow.
-- Describe context: `writingRules` with Helu's words: who reads the map, the product's nouns, the code words to avoid in plain text.
+- Parts: four kinds. `features/<x>` is a `feature`; `poc/<x>` is a `poc`, with loose files in `poc/` as the "POC seam"; `core/<x>` is `core`, with loose files in `core/` as "Core helpers"; the root files, `assets`, `locales` and `plugins` form `app`, and `util`, `gql` and `test` are parts of kind `app` too. A file in any other folder becomes an `unpartitioned-file` error, so a new top-level folder can't slip past. `meta.groups` heads them App shell, Features, Core and POCs; `meta.groupFlow` puts app and POCs above features, features above core, core above services; `meta.boundary` marks `poc` parts as something production code must not import, so `diff` flags a new link into one.
+- Imports: `cruiseWithRepoConfig` runs the repo's own dependency-cruiser with its `.dependency-cruiser.js` (which reads `tsconfig.json`), so path aliases like `@/` resolve. Every `@helu/*` import (the design system HDS, `@helu/core`) becomes a `library`, not a link.
+- SFC templates: `@vue/compiler-sfc` parses each template. A tag resolves through the file's own imports first, then through the generated `components.d.ts` for globally registered components; HDS tags land as the `@helu/hds` library, and `meta.library` lets `diff` map an HDS change to the parts that use it. `<component :is>` and `resolveComponent()` become `dynamic-component` notes, and a tag that resolves nowhere an `unknown-component` warning.
+- Components opened by name: the registry is read from the global components plugin and from the POC registry (`name: () => import(...)`). A file that mentions a registered name as a string gets a component use with `byName: true`, and the target gets `registeredAs`.
+- Routes: the TypeScript AST of every `*.route.ts`, `*.routes.ts` and the core router, with child paths joined. Each route gets its component (lazy import or identifier, with named views and the `meta.leftSidebar` component as `extraComponents`), the entitlement in `meta.feature` (inherited by children), the guard functions called in `beforeEnter`, the feature flags those guards check (including flags of the files the guards come from), and redirects. A file's own flags are flag names from the app's feature-flag type that appear in it as strings.
+- GraphQL operations: each colocated `.graphql` document outside `gql/` is walked against the frontend's committed `schema.graphql` for its root fields, fields and fragments. Its composable name follows codegen's convention (`useXQuery`), and a missing one in the generated composables is a warning. A file calls an operation when it imports that composable or its `XDocument`. The `.graphql` files stay in their parts without file nodes, which validation allows.
+- Backend subgraphs: the adapter reads the backend repo's router supergraph config and each subgraph's schema through `gh api` at the backend's current `main`, caches them by commit in the map folder, and falls back to the newest cache offline. Each `Type.field` gets its owning subgraphs, so an operation knows which services answer its root fields (`subgraphs`) and which serve any field it selects (`allSubgraphs`). `graph.backend` records the commit. The overview draws parts calling services.
+- Its own gaps: errors for files outside any part and for fields the schema doesn't know; warnings for unresolved imports, unknown components, unresolved route components, missing composables and root fields no subgraph owns; notes for dynamic components, unused registrations, unused operations and fields no subgraph owns.
+- Describe context: its own `RulesOptions` (the map's name, who reads it, a plain reader named in the rules, the product's nouns such as report, widget and dashboard, and the code words to say plainly: screen for page, pop-up window for dialog, "asks the server for" for query). The background is the backend repo's business README and glossary, and the overview is its system overview.
+- `snapshotPaths` is the main app's `src`, `tsconfig.json` and `.dependency-cruiser.js`, so a diff exports only what the scan reads. The adapter adds no `links` yet: its connections are imports (about 4,000), template components (about 500) and operation calls (about 300).
 
-A personal repo rarely needs all that. The usual tailoring is a few dozen lines in `.sinopia/adapter.mjs`: find the calls that cross a boundary imports don't show (RPC, sockets, queues, generated clients, routes, other repos) and add them as `links`.
+A personal repo rarely needs all that. The usual tailoring is a few dozen lines in `.sinopia/adapter.mjs`: find the calls that cross a boundary imports don't show (RPC, sockets, queues, generated clients, routes, other repos) and add them as `links`. k-twitch's adapter (tRPC calls, an event bus, a Python process reached over HTTP, routes) is about 300 lines.
 
 ## The API an adapter gets
 
@@ -112,7 +114,7 @@ A personal repo rarely needs all that. The usual tailoring is a few dozen lines 
 - files: `listFiles(root)` (tracked and untracked-but-not-ignored, minus build and dependency folders), `readText(path, maxBytes)` (null for binaries and big files), `sha1(text)`, `readmeOf(repo)`, `fileKindOf(path)`, `folderPartsOf(files)`, `folderPartOf(path, parts)`, `packageDirsOf(files)`;
 - imports: `cruiseWithoutConfig(cwd, targets, scratch, options)`, `cruiseWithRepoConfig(repo, cwd, targets, config, options)`, `CODE_FILE`;
 - links: `addLink(file, link)`, `fileLinks(file)`, `linkTargets(file)`;
-- checks: `validateGraph(graph, count)`, `coverageOf(graph, name)`, `ADAPTER_INTERFACE_VERSION`;
+- checks: `validateGraph(graph, scannedFileCount?)`, `coverageOf(graph, name)`, `ADAPTER_INTERFACE_VERSION`;
 - describe: `personalRules(name)`, `writingRules(options)`.
 
 ## Changes between versions
@@ -120,6 +122,7 @@ A personal repo rarely needs all that. The usual tailoring is a few dozen lines 
 ### Unversioned to 1 (2026-11-21)
 
 - Add `interfaceVersion: 1` to the adapter.
-- Stop calling `validateGraph` in `scan`: sinopia runs it on every scan now, so calling it too reports every problem twice.
+- Stop calling `validateGraph` in `scan`: sinopia runs it on every scan now, so calling it too reports every problem twice. The core's run has no scanned-file count: it checks that every file node sits in exactly one part, and parts may hold files without a node (GraphQL documents, for example) as before.
+- Declare the version as the literal `1`, not `ADAPTER_INTERFACE_VERSION`.
 - New and optional: `links` on a `FileNode` for links that aren't imports or components. Nothing has to change for it, but it's the place for RPC calls and the like, which used to have no home.
 - A project adapter can live in `.sinopia/adapter.mjs` and be loaded by the `sinopia` command. Adapters that call `runCli` from their own CLI keep working once they declare the version.
