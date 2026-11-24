@@ -2,6 +2,8 @@
 
 An adapter turns a repo's code into the graph that sinopia describes, diffs and draws. Sinopia ships two generic ones and leaves the rest to the project: each repo can carry its own adapter, written by its developers or their agent, that knows the links the generic scan can't see. Nobody maintains a list of supported stacks.
 
+Most repos don't need one. Map rules (`.sinopia/map.mjs`, `sinopia map docs`) say where a repo's links are in a few readable lines, and sinopia does the matching. An adapter is the full-code escape hatch, for what rules can't say: its own parts, file kinds or describe context, a schema from another repo. When a repo has both, the adapter wins.
+
 This file is the interface. `sinopia adapter docs` prints it.
 
 The current version is 1. Every adapter declares the version it was written for (`interfaceVersion`). Sinopia refuses an adapter with another version and says how to upgrade it; "Changes between versions" at the end lists what each version changed.
@@ -104,7 +106,7 @@ Helu's frontend is a Vue 3 monorepo with a federated GraphQL backend in another 
 - Describe context: its own `RulesOptions` (the map's name, who reads it, a plain reader named in the rules, the product's nouns such as report, widget and dashboard, and the code words to say plainly: screen for page, pop-up window for dialog, "asks the server for" for query). The background is the backend repo's business README and glossary, and the overview is its system overview.
 - `snapshotPaths` is the main app's `src`, `tsconfig.json` and `.dependency-cruiser.js`, so a diff exports only what the scan reads. The adapter adds no `links` yet: its connections are imports (about 4,000), template components (about 500) and operation calls (about 300).
 
-A personal repo rarely needs all that. The usual tailoring is a few dozen lines in `.sinopia/adapter.mjs`: find the calls that cross a boundary imports don't show (RPC, sockets, queues, generated clients, routes, other repos) and add them as `links`. k-twitch's adapter (tRPC calls, an event bus, a Python process reached over HTTP, routes) is about 300 lines.
+A personal repo rarely needs all that. The usual tailoring is a map file: find the calls that cross a boundary imports don't show (RPC, sockets, queues, generated clients, routes, other repos) and add a rule for each. k-twitch's adapter (tRPC calls, an event bus, a Python process reached over HTTP and spawned by the server, test configs, routes, outside services) was 638 lines; the same map, link for link, is nine rules in a 52-line `.sinopia/map.mjs`, its header comment included.
 
 ## The API an adapter gets
 

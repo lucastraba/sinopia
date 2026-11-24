@@ -1,23 +1,29 @@
 ---
 name: sinopia-adapter
-description: Write, repair or upgrade a project's Sinopia adapter (.sinopia/adapter.mjs), the module that tells Sinopia how a codebase connects. Use when a Sinopia map misses links the code has (RPC calls, sockets, message buses, generated clients, auto-imported components, contracts with other repos), when `sinopia check` fails because of the adapter, or when sinopia reports that an adapter implements an older interface version.
+description: Teach Sinopia how a codebase connects. Writes the project's map rules (.sinopia/map.mjs), or repairs, upgrades or converts a full adapter (.sinopia/adapter.mjs). Use when a Sinopia map misses links the code has (RPC calls, sockets, message buses, HTTP between its apps, generated clients, spawned processes, contracts with other repos), when `sinopia check` fails because of the map or adapter, or when sinopia reports that an adapter implements an older interface version.
 ---
 
-# Sinopia adapter
+# Sinopia map rules and adapters
 
-Sinopia maps a repo as parts, files and links. Its generic adapter only sees folders and JS/TS imports. Many codebases connect through things imports don't show: a client calls a server procedure by name, a component sends a socket event that a handler three folders away receives, a Python process reads what a Node process publishes. A project adapter finds those links in the code and adds them to the map. Your job is to write that adapter, or repair or upgrade the one the repo has, and to prove with `sinopia check` that it's better than the generic one.
+Sinopia maps a repo as parts, files and links. Its generic scan only sees folders and JS/TS imports. Many codebases connect through things imports don't show: a client calls a server procedure by name, a component sends a socket event that a handler three folders away receives, a Python process posts to what a Node process serves. Your job is to tell sinopia where those links are, and to prove with `sinopia check` that the map is better for it.
+
+There are two ways, in this order:
+
+1. **Map rules**, `.sinopia/map.mjs`: a short list of rules, one per mechanism, each saying where to look, what the call looks like (`'ee.emit({key}'`) and why. Sinopia does the parsing and matching. This is what the user reviews, so it's what you write.
+2. **A full adapter**, `.sinopia/adapter.mjs`: code that builds the graph. Only for what rules can't say (its own parts or file kinds, describe context, a schema fetched from another repo), or a repo that already has one.
 
 You need the `sinopia` CLI (`sinopia help`; install with `npm install -g --install-links github:lucastraba/sinopia` if it's missing) and a repo. Run every command from the repo root.
 
-## 1. Read the interface
+## 1. Read the docs
 
-Run `sinopia adapter docs` and read all of it before writing code. It defines the module shape, the graph, the rules and what `check` measures. This skill doesn't repeat it.
+Run `sinopia map docs` and read all of it before writing rules: the primitives, their options, templates and what `check` reports. When you need an adapter, `sinopia adapter docs` too. This skill doesn't repeat them.
 
 ## 2. Start from what exists
 
-- No `.sinopia/adapter.mjs`: run `sinopia adapter init`. It writes an adapter that wraps the generic one, so the map already works, and prints next steps.
+- Neither file: run `sinopia map init`. The empty map gives the generic result.
+- A map exists and `check` fails or reports `rule-failed`: read the errors and fix the rule, not the code being mapped.
 - An adapter exists and `sinopia check` reports an interface version mismatch: upgrade it (section 7), then continue here.
-- An adapter exists and `check` fails: read the errors. Each names a file and what's wrong. Fix the adapter, not the code being mapped.
+- An adapter exists and works: offer to convert it to rules (section 5b). Don't delete it without the user's yes; it's their code.
 
 ## 3. Measure the baseline
 
@@ -54,9 +60,24 @@ Services outside the repo (a third-party API, another team's server) have no fil
 
 Also look at `isolated.examples` from the baseline. Each isolated file either stands alone (a one-off script, a config file, a test helper) or is reached through a mechanism you haven't found yet. Find out which for every one.
 
-## 5. Write the links into the adapter
+## 5. Write the rules
 
-Work in `addProjectLinks` (or the adapter's `scan`), following these rules:
+One rule per mechanism, in `.sinopia/map.mjs`:
+
+- Pick the primitive that matches: `trpc`, `http`, `spawn`, `pythonImports`, `vitest`, `vueRoutes`, `externalServices`, `external`, and `link` for anything matched by a name (events, message types, queue topics, commands).
+- Write call shapes as templates copied from the code: `'ee.emit({key}'`, `"app.{method}({path}"`. Use a regular expression only when no template can say it, and expect `check` to count it against you.
+- Scope every rule to the folders where the mechanism lives (`in`, `from`, `to`, `server`, `clients`). A rule over the whole repo matches strings in places nobody meant.
+- Give every rule a `why`: one sentence a reader of the map would want, in the project's words.
+- Mark every rule you write `draft: true`. The user confirms a rule by deleting that line. Never remove `draft` yourself, and leave rules the user already confirmed alone unless they're wrong.
+- When no primitive fits, write a `custom({ name, why, run(ctx) })` rule and keep it small. Then say in your report which custom rule looks reusable, as a candidate primitive for sinopia.
+
+### 5b. Converting an adapter to rules
+
+Save `sinopia check --json` and a fingerprint of the adapter's graph first (every link, import, route and gap, sorted). Write the map, run it with `--adapter .sinopia/map.mjs`, and compare: the goal is the same fingerprint, not just the same counts. Every difference is either a bug in a rule or a bug the adapter had; find out which before you call it done. Delete the adapter only when the user agrees.
+
+### 5c. Writing links in an adapter
+
+When you're writing a full adapter, work in `addProjectLinks` (or the adapter's `scan`), following these rules:
 
 - Read files from `input.root` with `sinopia.readText(join(input.root, file.id), 500_000)`. Never read from `input.repo`: `diff` scans older commits from a snapshot.
 - Index the declaring side first (every handler with its key and file), then walk the calling side and match by key. Put each link on the calling file, pointing at the handling file: `sinopia.addLink(file, { target, kind, label })`. `kind` names the mechanism (`trpc`, `ws-event`, `http`, `spawn`); `label` is the key that crossed (`counter.increment`, `chat:message`, `GET /api/health`).
@@ -83,7 +104,7 @@ Then check recall: for each mechanism, search the repo for its calling pattern a
 
 Then check precision: pick five links of each new kind from `graph.json` (`sinopia scan` writes it to the map folder that it prints) and confirm in the code that each one is real. A wrong link is worse than a missing one, because the map states it as fact. Fix the matcher if any are wrong.
 
-If the adapter throws, `sinopia check` prints the stack trace, and the top frame in `.sinopia/adapter.mjs` is where to look.
+If the adapter throws, `sinopia check` prints the stack trace, and the top frame in `.sinopia/adapter.mjs` is where to look. A map rule that throws becomes a `rule-failed` error with its stack; the other rules still run.
 
 ## 7. Upgrading to a new interface version
 
@@ -95,7 +116,7 @@ When `sinopia` says the adapter implements an older interface version:
 
 ## 8. Finish
 
-- Commit `.sinopia/adapter.mjs` with the repo: on the branch the user is working on, or on a new branch when you're not sure that's wanted. Sinopia loads it automatically from then on, also for `refresh` timers.
-- Put the numbers at the top of the adapter as a comment: generic baseline and the adapter's result (isolated count, links by kind, part-to-part links), with the date. The next agent compares against it.
-- Tell the user what changed, in numbers: errors, isolated files before and after, part-to-part links before and after, the link kinds added with counts, what's still isolated and why, and any mechanism you saw but didn't map, with the reason.
+- Commit `.sinopia/map.mjs` (or the adapter) with the repo: on the branch the user is working on, or on a new branch when you're not sure that's wanted. Sinopia loads it automatically from then on, also for `refresh` timers.
+- Put the numbers at the top of the file as a comment: generic baseline and the result (isolated count, links by kind, part-to-part links), with the date. The next agent compares against it.
+- Tell the user what changed, in numbers: errors, isolated files before and after, part-to-part links before and after, the link kinds added with counts, what's still isolated and why, and any mechanism you saw but didn't map, with the reason. Then list the draft rules by number, one line each, so they can confirm or reject them without opening the file.
 - If the map already had descriptions, `sinopia refresh --force` (or `scan` then `describe`) updates them. Files whose content didn't change keep their descriptions; the new links show in the viewer at once.
