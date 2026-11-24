@@ -12,26 +12,35 @@ const HTTP_CLIENT = /\bfetch\(|\baxios\b|\bhttpx\b|\brequests\b|\burllib\b|\baio
  * code passes it on as it is: `httpx.get(BASE)`.
  */
 export const calledPaths = (text) => {
-    const vars = new Map();
-    const assigned = new Set();
     // Not a keyword argument (`get(url=f"…")`): that one is a call.
     const based = /(?<![\w.]|[(,]\s*)([\w.]+)\s*=\s*(?:f["']\{|`\$\{)([\w.]+)\}(\/[\w/-]*)["'`]/g;
-    for (const m of text.matchAll(based)) {
-        // A base built on another base: `ITEMS = f"{BASE}/items"`.
-        vars.set(m[1], (vars.get(m[2]) ?? '') + m[3]);
-        assigned.add(m.index + m[0].length - m[0].replace(/^[\w.]+\s*=\s*/, '').length);
-    }
-    const paths = new Set();
     const composed = /(?:f["']\{|`\$\{)([\w.]+)\}(\/[\w/-]*)["'`]/g;
-    for (const m of text.matchAll(composed)) {
-        if (assigned.has(m.index))
-            continue;
-        paths.add((vars.get(m[1]) ?? '') + m[2]);
+    const passedOn = /(?:\(|\burl\s*=)\s*([\w.]+)\s*[,)]/g;
+    const steps = [];
+    const valueAt = new Set();
+    for (const m of text.matchAll(based)) {
+        steps.push({ at: m.index, kind: 'set', m });
+        valueAt.add(m.index + m[0].length - m[0].replace(/^[\w.]+\s*=\s*/, '').length);
     }
-    for (const [name, path] of vars) {
-        const passed = new RegExp(`(?:\\(|\\burl\\s*=)\\s*${name.replace(/\./g, '\\.')}\\s*[,)]`);
-        if (passed.test(text))
-            paths.add(path);
+    for (const m of text.matchAll(composed))
+        if (!valueAt.has(m.index))
+            steps.push({ at: m.index, kind: 'use', m });
+    for (const m of text.matchAll(passedOn))
+        steps.push({ at: m.index, kind: 'pass', m });
+    // In source order, so each use takes the base its name holds at that point:
+    // `BASE = f"{url}/v1"`, a call, `BASE = f"{url}/v2"`, a call gives /v1/… then /v2/….
+    steps.sort((x, y) => x.at - y.at);
+    const vars = new Map();
+    const paths = new Set();
+    for (const { kind, m } of steps) {
+        const name = m[1];
+        // A base built on another base: `ITEMS = f"{BASE}/items"`.
+        if (kind === 'set')
+            vars.set(name, (vars.get(m[2]) ?? '') + m[3]);
+        else if (kind === 'use')
+            paths.add((vars.get(name) ?? '') + m[2]);
+        else if (vars.has(name))
+            paths.add(vars.get(name));
     }
     for (const m of text.matchAll(/\(\s*["'`](\/[\w-]+(?:\/[\w-]+)+)["'`]/g))
         paths.add(m[1]);

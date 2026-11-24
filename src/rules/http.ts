@@ -28,24 +28,30 @@ const HTTP_CLIENT = /\bfetch\(|\baxios\b|\bhttpx\b|\brequests\b|\burllib\b|\baio
  * code passes it on as it is: `httpx.get(BASE)`.
  */
 export const calledPaths = (text: string): Set<string> => {
-  const vars = new Map<string, string>();
-  const assigned = new Set<number>();
   // Not a keyword argument (`get(url=f"…")`): that one is a call.
   const based = /(?<![\w.]|[(,]\s*)([\w.]+)\s*=\s*(?:f["']\{|`\$\{)([\w.]+)\}(\/[\w/-]*)["'`]/g;
-  for (const m of text.matchAll(based)) {
-    // A base built on another base: `ITEMS = f"{BASE}/items"`.
-    vars.set(m[1] as string, (vars.get(m[2] as string) ?? '') + (m[3] as string));
-    assigned.add(m.index + m[0].length - m[0].replace(/^[\w.]+\s*=\s*/, '').length);
-  }
-  const paths = new Set<string>();
   const composed = /(?:f["']\{|`\$\{)([\w.]+)\}(\/[\w/-]*)["'`]/g;
-  for (const m of text.matchAll(composed)) {
-    if (assigned.has(m.index)) continue;
-    paths.add((vars.get(m[1] as string) ?? '') + (m[2] as string));
+  const passedOn = /(?:\(|\burl\s*=)\s*([\w.]+)\s*[,)]/g;
+  type Step = { at: number; kind: 'set' | 'use' | 'pass'; m: RegExpMatchArray };
+  const steps: Step[] = [];
+  const valueAt = new Set<number>();
+  for (const m of text.matchAll(based)) {
+    steps.push({ at: m.index as number, kind: 'set', m });
+    valueAt.add((m.index as number) + m[0].length - m[0].replace(/^[\w.]+\s*=\s*/, '').length);
   }
-  for (const [name, path] of vars) {
-    const passed = new RegExp(`(?:\\(|\\burl\\s*=)\\s*${name.replace(/\./g, '\\.')}\\s*[,)]`);
-    if (passed.test(text)) paths.add(path);
+  for (const m of text.matchAll(composed)) if (!valueAt.has(m.index as number)) steps.push({ at: m.index as number, kind: 'use', m });
+  for (const m of text.matchAll(passedOn)) steps.push({ at: m.index as number, kind: 'pass', m });
+  // In source order, so each use takes the base its name holds at that point:
+  // `BASE = f"{url}/v1"`, a call, `BASE = f"{url}/v2"`, a call gives /v1/… then /v2/….
+  steps.sort((x, y) => x.at - y.at);
+  const vars = new Map<string, string>();
+  const paths = new Set<string>();
+  for (const { kind, m } of steps) {
+    const name = m[1] as string;
+    // A base built on another base: `ITEMS = f"{BASE}/items"`.
+    if (kind === 'set') vars.set(name, (vars.get(m[2] as string) ?? '') + (m[3] as string));
+    else if (kind === 'use') paths.add((vars.get(name) ?? '') + (m[2] as string));
+    else if (vars.has(name)) paths.add(vars.get(name) as string);
   }
   for (const m of text.matchAll(/\(\s*["'`](\/[\w-]+(?:\/[\w-]+)+)["'`]/g)) paths.add(m[1] as string);
   return paths;

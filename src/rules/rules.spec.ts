@@ -75,6 +75,11 @@ describe('calledPaths', () => {
     expect([...calledPaths(py)].sort()).toEqual(['/api/items', '/control/voice']);
   });
 
+  it('resolves each use with the base its name holds at that point', () => {
+    const py = ['BASE = f"{url}/v1"', 'httpx.get(f"{BASE}/items")', 'BASE = f"{url}/v2"', 'httpx.get(f"{BASE}/items")', 'ITEMS = f"{BASE}/things"', 'httpx.get(ITEMS)'].join('\n');
+    expect([...calledPaths(py)].sort()).toEqual(['/v1/items', '/v2/items', '/v2/things']);
+  });
+
   it('takes the path of an interpolated call on a base it does not know', () => {
     expect([...calledPaths('httpx.post(f"{cfg.url}/control/voice")')]).toEqual(['/control/voice']);
     expect([...calledPaths('fetch(`${base}/api/x`)')]).toEqual(['/api/x']);
@@ -333,6 +338,35 @@ export default ({ http }) => [http({ server: 'server', clients: '', routes: /app
       'package.json -> scripts/sim.mjs [runs] null',
       'package.json -> serve.mjs [runs] null',
     ]);
+  });
+
+  it('warns about a data import even when no data file exists yet', async () => {
+    const graph = await scan(
+      { 'package.json': '{}', 'src/load.ts': "import missing from '../content/missing.yaml';" },
+      `export const base = 'js';\nexport default ({ dataFiles }) => [dataFiles({ in: 'content', extensions: ['yaml'] })];`
+    );
+    expect(graph.gaps.find((g) => g.kind === 'unresolved-data-import')?.file).toBe('src/load.ts');
+  });
+
+  it('lets one runner name another, and takes extensionless paths with a slash', async () => {
+    const graph = await scan(
+      {
+        'build.xml': '<exec>deploy.xml</exec>',
+        'deploy.xml': '<exec>bash bin/deploy</exec>',
+        'bin/deploy': '#!/bin/sh\necho deploy',
+      },
+      `export const base = 'plain';\nexport default ({ runs }) => [runs({ from: ['build.xml', 'deploy.xml'] })];`
+    );
+    expect(links(graph)).toEqual(['build.xml -> deploy.xml [runs] null', 'deploy.xml -> bin/deploy [runs] null']);
+  });
+
+  it('gives a custom rule null for a file it cannot read', async () => {
+    const graph = await scan(
+      { 'src/a.ts': 'export const a = 1;' },
+      `export const base = 'plain';\nexport default ({ custom }) => [custom({ name: 'probe', run: (ctx) => { if (ctx.addFile('optional.json') !== null) throw new Error('expected null'); ctx.addGap({ kind: 'probe', level: 'info', file: null, detail: 'went on' }); } })];`
+    );
+    expect(graph.gaps.find((g) => g.kind === 'rule-failed')).toBeUndefined();
+    expect(graph.gaps.find((g) => g.kind === 'probe')?.detail).toBe('went on');
   });
 
   it('uses the adapter, with a warning, when a repo has both', async () => {

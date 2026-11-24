@@ -73,7 +73,7 @@ One rule per mechanism, in `.sinopia/map.mjs`:
 
 ### 5b. Converting an adapter to rules
 
-Save `sinopia check --json` and a fingerprint of the adapter's graph first (every link, import, route and gap, sorted). Write the map, run it with `--adapter .sinopia/map.mjs`, and compare: the goal is the same fingerprint, not just the same counts. Every difference is either a bug in a rule or a bug the adapter had; find out which before you call it done. Delete the adapter only when the user agrees.
+Save `sinopia check --json` and a fingerprint of the adapter's graph first (every link, import, route and gap, and every part with the files in it, sorted). An adapter can group files into its own parts, so links that match can still hide a map that's grouped differently. Write the map, run it with `--adapter .sinopia/map.mjs`, and compare: the goal is the same fingerprint, not just the same counts. Every difference is either a bug in a rule or a bug the adapter had; find out which before you call it done. Delete the adapter only when the user agrees.
 
 While `.sinopia/adapter.mjs` exists, `--adapter auto` (the default) keeps picking it over the map. So for the whole conversion, including the loop in section 6, pass `--adapter .sinopia/map.mjs` to every `check` and `scan`. If the user keeps the adapter, tell them it stays the one sinopia uses until they remove it or pass the map explicitly.
 
@@ -123,4 +123,4 @@ When `sinopia` says the adapter implements an older interface version:
 - Commit `.sinopia/map.mjs` (or the adapter) with the repo: on the branch the user is working on, or on a new branch when you're not sure that's wanted. Sinopia loads it automatically from then on, also for `refresh` timers, unless the repo also has `.sinopia/adapter.mjs`: then the adapter wins until it's removed, and the map runs only with `--adapter .sinopia/map.mjs`.
 - Put the numbers at the top of the file as a comment: generic baseline and the result (isolated count, links by kind, part-to-part links), with the date. The next agent compares against it.
 - Tell the user what changed, in numbers: errors, isolated files before and after, part-to-part links before and after, the link kinds added with counts, what's still isolated and why, and any mechanism you saw but didn't map, with the reason. Then list the draft rules by number, one line each, so they can confirm or reject them without opening the file.
-- If the map already had descriptions, `sinopia refresh --force` (or `scan` then `describe`) updates them. Files whose content didn't change keep their descriptions; the new links show in the viewer at once.
+- If the map already had descriptions, `sinopia refresh --force` (or `scan` then `describe`) updates them; while `.sinopia/adapter.mjs` is still there, add `--adapter .sinopia/map.mjs`, or the refresh reads the adapter. Files whose content didn't change keep their descriptions; the new links show in the viewer at once.

@@ -264,7 +264,6 @@ export const dataFiles = (options: DataFilesOptions): Rule => {
     for (const id of listFiles(ctx.input.root)) {
       if (isData.test(id) && ctx.inScope(id, options.in) && ctx.addFile(id)) added.add(id);
     }
-    if (added.size === 0) return;
     const resolve = (from: string, spec: string): string | null => {
       if (spec.startsWith('.')) return posix.normalize(posix.join(posix.dirname(from), spec));
       const hit = aliases.find(([alias]) => spec === alias || spec.startsWith(`${alias}/`));
@@ -300,12 +299,16 @@ export const runs = (options: RunsOptions): Rule => {
   if (options.from === undefined) throw new Error("runs(): needs 'from'");
   const summary = `files named in ${describeScope(options.from)}, which start them`;
   return makeRule('runs', options, summary, [], (ctx) => {
-    const runners = listFiles(ctx.input.root).filter((id) => ctx.inScope(id, options.from));
-    // Paths a runner names: a run of path characters with a slash or an extension.
-    const paths = /(?<![\w./@-])(?:\.\/)?((?:[\w@.-]+\/)*[\w@-][\w@.-]*\.[A-Za-z]{1,5})(?![\w/-])/g;
-    for (const id of runners) {
-      const runner = ctx.addFile(id);
-      if (!runner) continue;
+    // Put every runner on the map first, so one runner can name another.
+    const runners = listFiles(ctx.input.root)
+      .filter((id) => ctx.inScope(id, options.from))
+      .map((id) => ctx.addFile(id))
+      .filter((file): file is NonNullable<typeof file> => file !== null);
+    // Paths a runner names: with a slash (`bin/deploy`) or an extension (`serve.mjs`).
+    // Only paths of mapped files count, so command words never match.
+    const paths = /(?<![\w./@$-])(?:\.\/)?((?:[\w@.-]+\/)+[\w@.-]+|[\w@-][\w@.-]*\.[A-Za-z]{1,5})(?![\w/$-])/g;
+    for (const runner of runners) {
+      const id = runner.id;
       // Comments name files without running them: YAML, shell, TOML and Makefiles use #.
       const raw = ctx.read(id);
       const text = /\.(ya?ml|sh|toml|cfg|ini)$|(^|\/)(Makefile|Dockerfile|Procfile)$/.test(id) ? raw.replace(/(^|\s)#.*$/gm, '$1') : raw;

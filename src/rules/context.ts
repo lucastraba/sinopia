@@ -113,7 +113,13 @@ export const ruleContext = (graph: Graph, input: ScanInput, report: RuleReport, 
     addFile: (id) => {
       const existing = byId.get(id);
       if (existing) return existing;
-      const text = readText(join(input.root, id), 500_000);
+      let text: string | null;
+      try {
+        text = readText(join(input.root, id), 500_000);
+      } catch {
+        // Missing or unreadable: the rule gets null, as promised, and goes on.
+        return null;
+      }
       if (text === null) return null;
       const folders = new Map<string, FolderPart>(
         graph.parts.map((part) => [

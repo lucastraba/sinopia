@@ -70,7 +70,14 @@ export const ruleContext = (graph, input, report, cache) => {
             const existing = byId.get(id);
             if (existing)
                 return existing;
-            const text = readText(join(input.root, id), 500_000);
+            let text;
+            try {
+                text = readText(join(input.root, id), 500_000);
+            }
+            catch {
+                // Missing or unreadable: the rule gets null, as promised, and goes on.
+                return null;
+            }
             if (text === null)
                 return null;
             const folders = new Map(graph.parts.map((part) => [
