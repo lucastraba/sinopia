@@ -2,7 +2,7 @@
 
 A map of a code base that you can read on a phone. The structure comes from the code (folders, imports, and whatever an adapter knows about the stack); Claude only writes the plain-language descriptions, cached by file content so a refresh only pays for what changed. A sinopia is the underdrawing beneath a fresco.
 
-Private for now. It started as Helu Map, inspired by [Floorplan](https://github.com/haydenschmitty/floorplan) (MIT); the plain-language rules in `src/describe/prompt.ts` are adapted from its writing guide.
+It started as Helu Map, inspired by [Floorplan](https://github.com/haydenschmitty/floorplan) (MIT); the plain-language rules in `src/describe/prompt.ts` are adapted from its writing guide.
 
 Ownership: parts of the core were first written in Helu's frontend repo; Helu confirmed in writing on 2026-11-21 that Sinopia belongs to its author.
 
@@ -23,7 +23,7 @@ The Claude Code plugin, with the `sinopia` and `sinopia-adapter` skills:
 /plugin install sinopia@sinopia
 ```
 
-On Claude Code 2.1.275 or later, `/plugin install sinopia --marketplace lucastraba/sinopia` does both. The repo is private for now, so both need GitHub access to it.
+On Claude Code 2.1.275 or later, `/plugin install sinopia --marketplace lucastraba/sinopia` does both.
 
 ## Try it on a project
 
