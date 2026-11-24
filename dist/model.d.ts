@@ -122,6 +122,24 @@ export interface GraphMeta {
     } | null;
     /** False when the adapter knows no links between files (plain folders and files). */
     hasLinks: boolean;
+    /** What each rule of a map file (`.sinopia/map.mjs`) did, in the file's order. Absent for adapters without rules. */
+    rules?: RuleReport[];
+}
+/** What one map rule did, so `check` and the viewer can show it next to the rule. */
+export interface RuleReport {
+    /** The primitive: `link`, `trpc`, `http`, `custom`… */
+    rule: string;
+    /** One line saying what the rule looks at, made from its options. */
+    summary: string;
+    why: string | null;
+    /** Written by an agent and not yet confirmed by a person. */
+    draft: boolean;
+    /** Call shapes given as regular expressions instead of templates. */
+    regexes: number;
+    /** Links the rule added, by kind (imports it adds count as `import`). */
+    links: Record<string, number>;
+    routes: number;
+    gaps: number;
 }
 export interface Graph {
     version: 1;

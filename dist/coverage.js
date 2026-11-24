@@ -57,6 +57,41 @@ export const coverageOf = (graph, adapter) => {
         operations: graph.operations.length,
     };
 };
+const countOf = (links) => Object.values(links).reduce((sum, n) => sum + n, 0);
+/**
+ * What each map rule found, then the three things a reviewer looks for:
+ * drafts nobody confirmed, call shapes written as regular expressions, and
+ * how much of the map comes from custom code.
+ */
+export const formatRules = (rules) => {
+    if (rules.length === 0)
+        return ['Rules: none (the map file returns an empty list)'];
+    const lines = ['Rules:'];
+    rules.forEach((rule, i) => {
+        const found = [
+            ...Object.entries(rule.links).map(([kind, n]) => `${n} ${kind}`),
+            ...(rule.routes > 0 ? [`${rule.routes} routes`] : []),
+            ...(rule.gaps > 0 ? [`${rule.gaps} notes`] : []),
+        ];
+        const flags = [rule.draft ? 'draft' : null, rule.regexes > 0 ? `${rule.regexes} regex` : null].filter(Boolean);
+        lines.push(`  ${i + 1}. ${rule.summary}${flags.length > 0 ? ` [${flags.join(', ')}]` : ''}`);
+        lines.push(`     found: ${found.length > 0 ? found.join(', ') : 'nothing'}`);
+        if (rule.why)
+            lines.push(`     why: ${rule.why}`);
+    });
+    const drafts = rules.flatMap((rule, i) => (rule.draft ? [i + 1] : []));
+    if (drafts.length > 0) {
+        lines.push(`Drafts: rule${drafts.length > 1 ? 's' : ''} ${drafts.join(', ')}, written by an agent and not yet confirmed. Delete \`draft: true\` to confirm one.`);
+    }
+    const regexes = rules.reduce((sum, rule) => sum + rule.regexes, 0);
+    if (regexes > 0)
+        lines.push(`Regular expressions: ${regexes} call shape${regexes > 1 ? 's' : ''}; a template ('ee.emit({key}') reads better where one fits.`);
+    const total = rules.reduce((sum, rule) => sum + countOf(rule.links), 0);
+    const custom = rules.filter((rule) => rule.rule === 'custom').reduce((sum, rule) => sum + countOf(rule.links), 0);
+    if (custom > 0)
+        lines.push(`Custom code: ${custom} of ${total} links (${((custom / total) * 100).toFixed(1)}%)`);
+    return lines;
+};
 export const formatCoverage = (coverage) => {
     const percent = (share) => `${(share * 100).toFixed(1)}%`;
     const kinds = Object.entries(coverage.links);

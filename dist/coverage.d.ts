@@ -1,4 +1,4 @@
-import type { Graph } from './model.js';
+import type { Graph, RuleReport } from './model.js';
 /**
  * How much of a repo the map connects. Deterministic: the same graph always
  * gives the same numbers, so an agent improving an adapter can compare runs.
@@ -37,4 +37,10 @@ export interface Coverage {
     operations: number;
 }
 export declare const coverageOf: (graph: Graph, adapter: string) => Coverage;
+/**
+ * What each map rule found, then the three things a reviewer looks for:
+ * drafts nobody confirmed, call shapes written as regular expressions, and
+ * how much of the map comes from custom code.
+ */
+export declare const formatRules: (rules: RuleReport[]) => string[];
 export declare const formatCoverage: (coverage: Coverage) => string[];

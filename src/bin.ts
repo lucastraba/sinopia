@@ -7,7 +7,8 @@ import { parseArgs } from 'node:util';
 import { AdapterVersionError } from './adapter.js';
 import { splitCommandArgs, UsageError } from './args.js';
 import { pickAdapter } from './loadAdapter.js';
-import { adapterInit, LOCAL_ADAPTER } from './adapterInit.js';
+import { adapterInit, LOCAL_ADAPTER, mapInit } from './adapterInit.js';
+import { LOCAL_MAP } from './rules/index.js';
 import { runCli } from './cli.js';
 import { repoRoot } from './repo.js';
 import { serve } from './serve.js';
@@ -17,14 +18,19 @@ const USAGE = `sinopia <command> [repo] [options]
   scan | check | describe | diff | refresh [repo]
         --adapter auto|js|plain|<file>
                                   how to read the repo (default auto: the repo's own
-                                  ${LOCAL_ADAPTER} when it has one, else js or plain)
+                                  ${LOCAL_ADAPTER} or ${LOCAL_MAP} when it has one,
+                                  else js or plain)
         --name <name>             the map's name (default: the repo folder)
         --out <dir>               where the map goes (default $SINOPIA_HOME/maps/<name>)
         plus the command's own options (sinopia help lists them)
   serve [--maps <dir> | --data <dir>] [--host <ip>] [--port 8400]
         every map under --maps at /p/<name>/, or one map at /
+  map init [repo] [--force]
+        write ${LOCAL_MAP}, the rules for links imports don't show, and print next steps
+  map docs
+        print the rules and their primitives (docs/map.md)
   adapter init [repo] [--adapter js|plain] [--force]
-        write ${LOCAL_ADAPTER}, starting from the generic adapter, and print next steps
+        write ${LOCAL_ADAPTER}: full code, for what map rules can't say
   adapter docs
         print the adapter interface (docs/adapters.md)
 
@@ -52,10 +58,10 @@ const main = async () => {
     });
     return;
   }
-  if (command === 'adapter') {
+  if (command === 'adapter' || command === 'map') {
     const [sub, ...args] = rest;
     if (sub === 'docs') {
-      console.log(readFileSync(join(packageRoot, 'docs', 'adapters.md'), 'utf8'));
+      console.log(readFileSync(join(packageRoot, 'docs', command === 'map' ? 'map.md' : 'adapters.md'), 'utf8'));
       return;
     }
     if (sub === 'init') {
@@ -64,8 +70,13 @@ const main = async () => {
         allowPositionals: true,
         options: { adapter: { type: 'string' }, force: { type: 'boolean', default: false } },
       });
+      const repo = repoRoot(resolve(positionals[0] ?? '.'));
+      if (command === 'map') {
+        mapInit({ repo, force: values.force });
+        return;
+      }
       const mode = values.adapter === 'js' || values.adapter === 'plain' ? values.adapter : null;
-      adapterInit({ repo: repoRoot(resolve(positionals[0] ?? '.')), mode, force: values.force });
+      adapterInit({ repo, mode, force: values.force });
       return;
     }
     console.log(USAGE);
