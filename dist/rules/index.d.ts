@@ -12,6 +12,8 @@ export declare const primitives: {
     vitest: (options?: import("./context.js").CommonOptions) => Rule;
     vueRoutes: (options?: import("./tools.js").ScopeOptions) => Rule;
     pythonImports: (options?: import("./tools.js").ScopeOptions) => Rule;
+    dataFiles: (options: import("./tools.js").DataFilesOptions) => Rule;
+    runs: (options: import("./tools.js").RunsOptions) => Rule;
     externalServices: (options?: import("./tools.js").ExternalServicesOptions) => Rule;
     external: (options: import("./tools.js").ExternalOptions) => Rule;
     custom: (options: import("./tools.js").CustomOptions) => Rule;

@@ -39,7 +39,7 @@ The default export gets the primitives and returns the rules, in the order they 
 
 A call shape is the code you'd search for, with placeholders:
 
-- `{key}` (or any `{name}`) captures a string literal (`'x'`, `"x"`, `` `x` ``) or an identifier.
+- `{key}` (or any `{name}`) captures a string literal (`'x'`, `"x"`, `` `x` ``) or an identifier, dotted ones whole: in `ipcRenderer.invoke(IPC.readSaves)`, the key is `IPC.readSaves`.
 - `{*}` skips anything up to the next part of the template, on the same line: `'bus.publish({*}, {key})'`.
 
 Whitespace may appear between any two parts of the code, so `'ee.emit({key}'` also matches `ee.emit( FOO`. A space between two words in the template means at least one space. A template that starts or ends with a word matches whole words only: `'ee.emit('` never matches `free.emit(`, and `{key}` never matches half a name.
@@ -65,9 +65,9 @@ Most mechanisms are a call on one side and a handler on the other, matched by a 
 |---|---|
 | `kind` | What crosses, as the map labels the link: `event`, `ws-event`, `queue`, `command`. |
 | `in` | Where both sides live. `from` and `to` narrow it per side. |
-| `call` | The calling shape(s), with `{key}`. |
+| `call` | The calling shape(s), with `{key}`. Leave it out when files use the name without a call (a global exposed by name, a registry looked up by name): then a whole-word mention of a key the answering side declares counts. |
 | `answer` | The answering shape(s), with the same `{key}`. |
-| `wrappers` | `true`: calls made inside exported helpers (`export const emitPaid = () => ee.emit(PAID)`) count for the helper's callers, not for the helper's file. |
+| `wrappers` | `true`: calls made inside exported helpers (`export const emitPaid = () => ee.emit(PAID)`) count for the helper's callers, not for the helper's file. Only files that import the helper's file count. |
 | `labels` | `'constants'`: when the key is a constant (`ee.emit(PAID)`), label the link with its value from an `export const PAID = 'order.paid'` in the same files. |
 
 Each calling file gets a link to every other file that answers the same key. A key nothing answers is an `unmatched-<kind>` warning.
@@ -92,6 +92,8 @@ On the client side, a file counts when it uses an HTTP client (`fetch`, axios, h
 | `pythonImports({ in })` | Imports between the repo's own Python modules. The generic `js` adapter lists Python files without links. |
 | `vitest()` | Vitest configs linked to their `setupFiles` and `globalSetup`, a workspace file to each project's config. |
 | `vueRoutes({ in })` | vue-router records (`RouteRecordRaw`) as the map's screens. |
+| `dataFiles({ in, extensions, aliases })` | Data files the code imports (`extensions: ['yaml', 'json']`) put on the map, which otherwise maps only code, with an import from each file that loads one. `aliases` maps import aliases to folders: `{ '@content': 'content' }`. |
+| `runs({ from })` | Files that start code by naming it (`package.json` scripts, CI workflows, build configs, Makefiles) put on the map, with a `runs` link to every repo file they name by path. Comments don't count; a path a CI file only filters on does. |
 | `externalServices({ in, names })` | Services outside the repo reached with `fetch` on a URL constant or base, or `new WebSocket(url)`: a note on the calling file. `names` labels them by a piece of the URL: `{ Twitch: 'twitch.tv' }`. |
 | `external({ name, call, in })` | One service reached through an SDK call (`call: 'ElevenLabs('`): a note on each file that makes the call. |
 

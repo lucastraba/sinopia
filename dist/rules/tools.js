@@ -233,6 +233,87 @@ export const external = (options) => {
         }
     });
 };
+/**
+ * Data files the code imports (YAML, JSON, CSV…) put on the map, with an
+ * import from each file that loads one. The generic scan maps only code, so
+ * without this a game's content or an app's fixtures don't exist on the map.
+ */
+export const dataFiles = (options) => {
+    checkOptions('dataFiles', options, ['in', 'extensions', 'aliases']);
+    if (!options.in || !options.extensions?.length)
+        throw new Error("dataFiles(): needs 'in' and 'extensions'");
+    const extensions = options.extensions.map((ext) => ext.replace(/^\./, ''));
+    const isData = new RegExp(`\\.(${extensions.map((ext) => ext.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|')})$`);
+    const aliases = Object.entries(options.aliases ?? {})
+        .map(([alias, dir]) => [alias.replace(/\/+$/, ''), dir.replace(/^\.\/|\/+$/g, '')])
+        .sort((a, b) => b[0].length - a[0].length);
+    const summary = `data files (${extensions.join(', ')}) in ${describeScope(options.in)}, and the code that imports them`;
+    return makeRule('dataFiles', options, summary, [], (ctx) => {
+        const added = new Set();
+        for (const id of listFiles(ctx.input.root)) {
+            if (isData.test(id) && ctx.inScope(id, options.in) && ctx.addFile(id))
+                added.add(id);
+        }
+        if (added.size === 0)
+            return;
+        const resolve = (from, spec) => {
+            if (spec.startsWith('.'))
+                return posix.normalize(posix.join(posix.dirname(from), spec));
+            const hit = aliases.find(([alias]) => spec === alias || spec.startsWith(`${alias}/`));
+            return hit ? posix.join(hit[1], spec.slice(hit[0].length + 1)) : null;
+        };
+        const specifiers = /(?:\bfrom\s*|\bimport\s*\(\s*|\bimport\s+|\brequire\s*\(\s*)['"]([^'"\n]+)['"]/g;
+        for (const file of ctx.files()) {
+            if (added.has(file.id) || !/\.(m|c)?[jt]sx?$|\.vue$|\.svelte$/.test(file.id))
+                continue;
+            for (const m of ctx.code(file.id).matchAll(specifiers)) {
+                const spec = m[1].replace(/\?.*$/, '');
+                if (!isData.test(spec))
+                    continue;
+                const target = resolve(file.id, spec);
+                if (target && added.has(target))
+                    ctx.addImport(file, target);
+                else if (target)
+                    ctx.addGap({ kind: 'unresolved-data-import', level: 'warning', file: file.id, detail: `${m[1]}: no such file in ${describeScope(options.in)}` });
+            }
+        }
+    });
+};
+/**
+ * Files that start code by naming it (package.json scripts, CI workflows,
+ * build and service configs, Makefiles) put on the map, with a `runs` link to
+ * each repo file they name by path. Scripts nothing imports stop looking
+ * orphaned when something in the repo runs them.
+ */
+export const runs = (options) => {
+    checkOptions('runs', options, ['from']);
+    if (!options.from)
+        throw new Error("runs(): needs 'from'");
+    const summary = `files named in ${describeScope(options.from)}, which start them`;
+    return makeRule('runs', options, summary, [], (ctx) => {
+        const runners = listFiles(ctx.input.root).filter((id) => ctx.inScope(id, options.from));
+        // Paths a runner names: a run of path characters with a slash or an extension.
+        const paths = /(?<![\w./@-])(?:\.\/)?((?:[\w@.-]+\/)*[\w@-][\w@.-]*\.[A-Za-z]{1,5})(?![\w/-])/g;
+        for (const id of runners) {
+            const runner = ctx.addFile(id);
+            if (!runner)
+                continue;
+            // Comments name files without running them: YAML, shell, TOML and Makefiles use #.
+            const raw = ctx.read(id);
+            const text = /\.(ya?ml|sh|toml|cfg|ini)$|(^|\/)(Makefile|Dockerfile|Procfile)$/.test(id) ? raw.replace(/(^|\s)#.*$/gm, '$1') : raw;
+            const named = new Set();
+            for (const m of text.matchAll(paths)) {
+                const path = m[1];
+                for (const candidate of [posix.normalize(path), posix.normalize(posix.join(posix.dirname(id), path))]) {
+                    if (candidate !== id && ctx.byId.has(candidate))
+                        named.add(candidate);
+                }
+            }
+            for (const target of [...named].sort())
+                ctx.addLink(runner, { target, kind: 'runs', label: null });
+        }
+    });
+};
 /** Code, for what no primitive can say. `check` counts what custom rules add, so it stays visible. */
 export const custom = (options) => {
     checkOptions('custom', options, ['name', 'run']);

@@ -30,6 +30,12 @@ export interface RuleContext {
     addImport(file: FileNode, target: string): void;
     addGap(gap: Gap): void;
     addRoute(route: Graph['routes'][number]): void;
+    /**
+     * Puts a file the generic scan skipped on the map (a data file, a language
+     * it doesn't read), in the part of its folder, and returns it. Null when it
+     * can't be read. A file already mapped comes back as it is.
+     */
+    addFile(id: string): FileNode | null;
 }
 export declare const scopeList: (scope: Scope | undefined) => string[];
 export declare const inScope: (id: string, scope: Scope | undefined) => boolean;

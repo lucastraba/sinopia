@@ -5,7 +5,7 @@ import { chooseMode, folderAdapter } from '../adapters/folders.js';
 import { type Rule, type RuleReport, ruleContext } from './context.js';
 import { http } from './http.js';
 import { link } from './link.js';
-import { custom, external, externalServices, pythonImports, spawn, vitest, vueRoutes } from './tools.js';
+import { custom, dataFiles, external, externalServices, pythonImports, runs, spawn, vitest, vueRoutes } from './tools.js';
 import { trpc } from './trpc.js';
 
 export type { Rule, RuleContext, RuleReport, Scope } from './context.js';
@@ -14,7 +14,7 @@ export type { Rule, RuleContext, RuleReport, Scope } from './context.js';
 export const LOCAL_MAP = '.sinopia/map.mjs';
 
 /** The primitives a map file gets: its default export is `(primitives) => rules`. */
-export const primitives = { link, trpc, http, spawn, vitest, vueRoutes, pythonImports, externalServices, external, custom };
+export const primitives = { link, trpc, http, spawn, vitest, vueRoutes, pythonImports, dataFiles, runs, externalServices, external, custom };
 export type Primitives = typeof primitives;
 
 interface MapModule {

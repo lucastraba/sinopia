@@ -5,12 +5,12 @@ import { chooseMode, folderAdapter } from '../adapters/folders.js';
 import { ruleContext } from './context.js';
 import { http } from './http.js';
 import { link } from './link.js';
-import { custom, external, externalServices, pythonImports, spawn, vitest, vueRoutes } from './tools.js';
+import { custom, dataFiles, external, externalServices, pythonImports, runs, spawn, vitest, vueRoutes } from './tools.js';
 import { trpc } from './trpc.js';
 /** Where a project keeps its map rules. `sinopia` loads them by default when they exist. */
 export const LOCAL_MAP = '.sinopia/map.mjs';
 /** The primitives a map file gets: its default export is `(primitives) => rules`. */
-export const primitives = { link, trpc, http, spawn, vitest, vueRoutes, pythonImports, externalServices, external, custom };
+export const primitives = { link, trpc, http, spawn, vitest, vueRoutes, pythonImports, dataFiles, runs, externalServices, external, custom };
 /** Runs the rules over a graph in order, writing what each did to `graph.meta.rules`. */
 export const applyRules = (rules, graph, input) => {
     const cache = new Map();

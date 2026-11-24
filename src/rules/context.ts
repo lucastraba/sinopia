@@ -1,6 +1,7 @@
 import { join } from 'node:path';
 import type { ScanInput } from '../adapter.js';
-import { readText } from '../adapters/files.js';
+import { folderPartOf, readText, sha1, type FolderPart } from '../adapters/files.js';
+import { fileKindOf } from '../adapters/folders.js';
 import { addLink } from '../links.js';
 import type { FileLink, FileNode, Gap, Graph, RuleReport } from '../model.js';
 import { stripComments } from './parse.js';
@@ -38,6 +39,12 @@ export interface RuleContext {
   addImport(file: FileNode, target: string): void;
   addGap(gap: Gap): void;
   addRoute(route: Graph['routes'][number]): void;
+  /**
+   * Puts a file the generic scan skipped on the map (a data file, a language
+   * it doesn't read), in the part of its folder, and returns it. Null when it
+   * can't be read. A file already mapped comes back as it is.
+   */
+  addFile(id: string): FileNode | null;
 }
 
 export const scopeList = (scope: Scope | undefined): string[] =>
@@ -102,6 +109,44 @@ export const ruleContext = (graph: Graph, input: ScanInput, report: RuleReport, 
     addRoute: (route) => {
       graph.routes.push(route);
       report.routes++;
+    },
+    addFile: (id) => {
+      const existing = byId.get(id);
+      if (existing) return existing;
+      const text = readText(join(input.root, id), 500_000);
+      if (text === null) return null;
+      const folders = new Map<string, FolderPart>(
+        graph.parts.map((part) => [
+          part.dir,
+          { id: part.id, kind: part.kind === 'package' ? 'package' : part.dir === '' ? 'root' : 'folder', name: part.name, dir: part.dir },
+        ])
+      );
+      const home = folderPartOf(id, folders);
+      let part = graph.parts.find((p) => p.id === home.id);
+      if (!part) {
+        part = { ...home, files: [] };
+        graph.parts.push(part);
+        graph.parts.sort((a, b) => a.id.localeCompare(b.id));
+      }
+      part.files.push(id);
+      const file: FileNode = {
+        id,
+        part: part.id,
+        kind: fileKindOf(id),
+        lines: text.split('\n').length,
+        hash: sha1(text),
+        imports: [],
+        libraries: [],
+        components: [],
+        operations: [],
+        flags: [],
+        registeredAs: null,
+      };
+      graph.files.push(file);
+      byId.set(id, file);
+      ids.add(id);
+      report.files = (report.files ?? 0) + 1;
+      return file;
     },
   };
 };

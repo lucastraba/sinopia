@@ -28,6 +28,31 @@ export interface ExternalOptions extends ScopeOptions {
 }
 /** One service outside the repo, reached through an SDK call: a note on each file that makes the call. */
 export declare const external: (options: ExternalOptions) => Rule;
+export interface DataFilesOptions extends CommonOptions {
+    /** Where the data files are: `'content'`. */
+    in: Scope;
+    /** Their extensions, without the dot: `['yaml', 'json']`. */
+    extensions: string[];
+    /** Import aliases the code uses for them: `{ '@content': 'content' }`. Relative imports need none. */
+    aliases?: Record<string, string>;
+}
+/**
+ * Data files the code imports (YAML, JSON, CSV…) put on the map, with an
+ * import from each file that loads one. The generic scan maps only code, so
+ * without this a game's content or an app's fixtures don't exist on the map.
+ */
+export declare const dataFiles: (options: DataFilesOptions) => Rule;
+export interface RunsOptions extends CommonOptions {
+    /** The files that start code: `['package.json', '.github/workflows', 'electron-builder.yml']`. */
+    from: Scope;
+}
+/**
+ * Files that start code by naming it (package.json scripts, CI workflows,
+ * build and service configs, Makefiles) put on the map, with a `runs` link to
+ * each repo file they name by path. Scripts nothing imports stop looking
+ * orphaned when something in the repo runs them.
+ */
+export declare const runs: (options: RunsOptions) => Rule;
 export interface CustomOptions extends CommonOptions {
     /** Short name for the rule in `check`. */
     name?: string;

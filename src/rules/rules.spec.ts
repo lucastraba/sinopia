@@ -153,6 +153,54 @@ export default ({ http }) => [
     expect(graph.gaps.find((g) => g.kind === 'unmatched-trpc')?.detail).toMatch(/trpc\.counter\.reset\.mutate .* matches no procedure/);
   });
 
+  it('links mentions of a declared name when there is no call shape', async () => {
+    const graph = await scan(
+      {
+        'desktop/preload.ts': "contextBridge.exposeInMainWorld('gameDesktop', api);",
+        'src/platform.ts': 'export const desktop = window.gameDesktop ?? null;',
+        'src/other.ts': 'export const gameDesktopish = 1;',
+      },
+      `export const base = 'plain';\nexport default ({ link }) => [link({ kind: 'bridge', from: 'src', to: 'desktop', answer: 'exposeInMainWorld({key}' })];`
+    );
+    expect(links(graph)).toEqual(['src/platform.ts -> desktop/preload.ts [bridge] gameDesktop']);
+  });
+
+  it('puts imported data files on the map, through relative imports and aliases', async () => {
+    const graph = await scan(
+      {
+        'content/items.yaml': 'sword: 1',
+        'content/strings/en.yaml': 'hi: Hello',
+        'content/notes.md': '# not data',
+        'package.json': '{}',
+        'src/load.ts': "import items from '@content/items.yaml';\nimport en from '../content/strings/en.yaml?raw';\nimport gone from '@content/gone.yaml';",
+      },
+      `export const base = 'js';\nexport default ({ dataFiles }) => [dataFiles({ in: 'content', extensions: ['yaml'], aliases: { '@content': 'content' } })];`
+    );
+    expect(graph.files.map((f) => f.id).filter((id) => id.endsWith('.yaml')).sort()).toEqual(['content/items.yaml', 'content/strings/en.yaml']);
+    expect(graph.files.find((f) => f.id === 'src/load.ts')?.imports.sort()).toEqual(['content/items.yaml', 'content/strings/en.yaml']);
+    expect(graph.gaps.find((g) => g.kind === 'unresolved-data-import')?.detail).toMatch(/@content\/gone\.yaml/);
+    expect(graph.meta.rules?.[0]).toEqual(expect.objectContaining({ files: 2 }));
+  });
+
+  it('links runners to the files they name by path, not in comments', async () => {
+    const graph = await scan(
+      {
+        'package.json': JSON.stringify({ scripts: { sim: 'node scripts/sim.mjs --fast', serve: 'node ./serve.mjs' } }),
+        '.github/workflows/ci.yml': 'steps:\n  # scripts/old.mjs used to run here\n  - run: bash scripts/deploy.sh',
+        'scripts/sim.mjs': 'export {};',
+        'scripts/old.mjs': 'export {};',
+        'scripts/deploy.sh': 'echo hi',
+        'serve.mjs': 'export {};',
+      },
+      `export const base = 'plain';\nexport default ({ runs }) => [runs({ from: ['package.json', '.github'] })];`
+    );
+    expect(links(graph)).toEqual([
+      '.github/workflows/ci.yml -> scripts/deploy.sh [runs] null',
+      'package.json -> scripts/sim.mjs [runs] null',
+      'package.json -> serve.mjs [runs] null',
+    ]);
+  });
+
   it('uses the adapter, with a warning, when a repo has both', async () => {
     const repo = makeRepo({
       'src/a.ts': 'export const a = 1;',

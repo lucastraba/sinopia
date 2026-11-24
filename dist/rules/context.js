@@ -1,5 +1,6 @@
 import { join } from 'node:path';
-import { readText } from '../adapters/files.js';
+import { folderPartOf, readText, sha1 } from '../adapters/files.js';
+import { fileKindOf } from '../adapters/folders.js';
 import { addLink } from '../links.js';
 import { stripComments } from './parse.js';
 import { compileTemplate } from './template.js';
@@ -64,6 +65,44 @@ export const ruleContext = (graph, input, report, cache) => {
         addRoute: (route) => {
             graph.routes.push(route);
             report.routes++;
+        },
+        addFile: (id) => {
+            const existing = byId.get(id);
+            if (existing)
+                return existing;
+            const text = readText(join(input.root, id), 500_000);
+            if (text === null)
+                return null;
+            const folders = new Map(graph.parts.map((part) => [
+                part.dir,
+                { id: part.id, kind: part.kind === 'package' ? 'package' : part.dir === '' ? 'root' : 'folder', name: part.name, dir: part.dir },
+            ]));
+            const home = folderPartOf(id, folders);
+            let part = graph.parts.find((p) => p.id === home.id);
+            if (!part) {
+                part = { ...home, files: [] };
+                graph.parts.push(part);
+                graph.parts.sort((a, b) => a.id.localeCompare(b.id));
+            }
+            part.files.push(id);
+            const file = {
+                id,
+                part: part.id,
+                kind: fileKindOf(id),
+                lines: text.split('\n').length,
+                hash: sha1(text),
+                imports: [],
+                libraries: [],
+                components: [],
+                operations: [],
+                flags: [],
+                registeredAs: null,
+            };
+            graph.files.push(file);
+            byId.set(id, file);
+            ids.add(id);
+            report.files = (report.files ?? 0) + 1;
+            return file;
         },
     };
 };

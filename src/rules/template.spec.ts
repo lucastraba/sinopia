@@ -21,8 +21,14 @@ describe('compileTemplate', () => {
   it('matches whole words at both ends and whole keys', () => {
     expect(keys('ee.emit({key}', 'free.emit(FOO)')).toEqual([]);
     expect(compileTemplate('ee.emit').match('ee.emitter')).toHaveLength(0);
-    expect(keys('send({key})', 'send(counter.increment)')).toEqual([]);
     expect(keys('send({key})', 'send(increment)')).toEqual(['increment']);
+    expect(keys('send({key})', 'send(incrementBy)')).toEqual(['incrementBy']);
+  });
+
+  it('captures a dotted name whole, so constant objects work as keys', () => {
+    expect(keys('ipcRenderer.invoke({key}', 'ipcRenderer.invoke(IPC.readSaves, slot)')).toEqual(['IPC.readSaves']);
+    expect(keys('ipcRenderer.invoke({key}', 'ipcRenderer.invoke(IPC . readSaves)')).toEqual(['IPC.readSaves']);
+    expect(keys('{key}.query(', 'trpc.counter.get.query()')).toEqual(['trpc.counter.get']);
   });
 
   it('needs at least one space where the template has one between two words', () => {

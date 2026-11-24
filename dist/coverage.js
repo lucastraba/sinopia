@@ -71,6 +71,7 @@ export const formatRules = (rules) => {
         const found = [
             ...Object.entries(rule.links).map(([kind, n]) => `${n} ${kind}`),
             ...(rule.routes > 0 ? [`${rule.routes} routes`] : []),
+            ...((rule.files ?? 0) > 0 ? [`${rule.files} files put on the map`] : []),
             ...(rule.gaps > 0 ? [`${rule.gaps} notes`] : []),
         ];
         const flags = [rule.draft ? 'draft' : null, rule.regexes > 0 ? `${rule.regexes} regex` : null].filter(Boolean);

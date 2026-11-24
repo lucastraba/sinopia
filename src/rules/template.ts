@@ -1,7 +1,8 @@
 // Call shapes written as code: `ee.emit({key}` instead of a regular expression.
 //
 // A template is the code you'd search for, with placeholders:
-//   {name}  captures a string literal ('x', "x", `x`) or an identifier, as a value named `name`
+//   {name}  captures a string literal ('x', "x", `x`) or an identifier, also a dotted
+//           one (`IPC.readSaves`), as a value named `name`
 //   {*}     skips anything up to the next part of the template, on the same line
 // Whitespace may appear between any two parts of the code; a space between two
 // words in the template means at least one. A template that starts or ends
@@ -27,6 +28,9 @@ export interface CompiledTemplate {
   names: string[];
   match(text: string): TemplateMatch[];
 }
+
+/** An identifier or a member path of them: `FOO`, `IPC.readSaves`, `Events.order.paid`. */
+const IDENT_PATH = '[A-Za-z_$][\\w$]*(?:\\s*\\.\\s*[A-Za-z_$][\\w$]*)*';
 
 const escape = (text: string) => text.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&');
 
@@ -94,7 +98,7 @@ export const compileTemplate = (template: string | RegExp): CompiledTemplate => 
       if (names.includes(token.name)) throw new Error(`'{${token.name}}' appears twice in the call template '${template}'`);
       const i = names.length;
       names.push(token.name);
-      pattern += `(?:(?<q${i}>['"\`])(?<s${i}>(?:\\\\.|(?!\\k<q${i}>)[^\\\\\\n])*)\\k<q${i}>|(?<i${i}>[A-Za-z_$][\\w$]*)(?![\\w$]))`;
+      pattern += `(?:(?<q${i}>['"\`])(?<s${i}>(?:\\\\.|(?!\\k<q${i}>)[^\\\\\\n])*)\\k<q${i}>|(?<i${i}>${IDENT_PATH})(?![\\w$]))`;
     }
     previous = token;
   }
@@ -115,7 +119,7 @@ export const compileTemplate = (template: string | RegExp): CompiledTemplate => 
           const quoted = m.groups?.[`s${i}`];
           const ident = m.groups?.[`i${i}`];
           if (quoted !== undefined) values[name] = { value: quoted, quoted: true };
-          else if (ident !== undefined) values[name] = { value: ident, quoted: false };
+          else if (ident !== undefined) values[name] = { value: ident.replace(/\s+/g, ''), quoted: false };
         });
         return { index: m.index, end: m.index + m[0].length, values };
       }),

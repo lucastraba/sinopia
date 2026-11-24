@@ -140,6 +140,8 @@ export interface RuleReport {
     links: Record<string, number>;
     routes: number;
     gaps: number;
+    /** Files the rule put on the map that the generic scan skipped. */
+    files?: number;
 }
 export interface Graph {
     version: 1;
