@@ -3,7 +3,7 @@ import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { parseArgs } from 'node:util';
 import { assertAdapterVersion, type Adapter } from './adapter.js';
-import { coverageOf, formatCoverage } from './coverage.js';
+import { coverageOf, formatCoverage, formatRules } from './coverage.js';
 import { describe } from './describe/describe.js';
 import { diffGraphs } from './diff/diff.js';
 import { formatDiff } from './diff/format.js';
@@ -193,10 +193,11 @@ export const runCli = async (options: CliOptions): Promise<void> => {
     const graph = await scanAt(options, null);
     const coverage = coverageOf(graph, options.adapterSource ?? adapter.name);
     if (values.json) {
-      console.log(JSON.stringify({ ...coverage, gapList: graph.gaps }, null, 2));
+      console.log(JSON.stringify({ ...coverage, rules: graph.meta.rules ?? null, gapList: graph.gaps }, null, 2));
     } else {
       console.log(`Check of ${repo} with adapter ${coverage.adapter} (interface v${adapter.interfaceVersion})`);
       for (const line of formatCoverage(coverage)) console.log(`  ${line}`);
+      if (graph.meta.rules) for (const line of formatRules(graph.meta.rules)) console.log(`  ${line}`);
       printGaps(graph);
     }
     if (!coverage.passes) process.exitCode = 1;

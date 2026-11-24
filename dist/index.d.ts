@@ -14,3 +14,5 @@ export { runPool } from './pool.js';
 export { ensureDir, exportSnapshot, git, repoRoot, resolveSha } from './repo.js';
 export { serve, type ServeOptions } from './serve.js';
 export { summarizeGaps, validateGraph } from './validate.js';
+export { applyRules, LOCAL_MAP, mapAdapter, type Primitives, primitives, type Rule, type RuleContext, type Scope, } from './rules/index.js';
+export { compileTemplate, type CompiledTemplate, type TemplateMatch } from './rules/template.js';

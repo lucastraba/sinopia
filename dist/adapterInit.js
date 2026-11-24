@@ -67,6 +67,51 @@ Next steps:
      (fewer isolated files, more part-to-part links, new link kinds).
   5. Commit ${file} with the repo.
 `;
+import { LOCAL_MAP } from './rules/index.js';
+export const mapTemplate = (name, date) => `// How ${name} connects, beyond imports. Written by \`sinopia map init\` on ${date}.
+// Each rule says where to look and what the call looks like; sinopia does the
+// matching. \`sinopia check\` shows what each rule found. All primitives and
+// their options: \`sinopia map docs\`.
+//
+// A rule an agent wrote carries \`draft: true\` until a person confirms it.
+
+export default ({ link, trpc, http, spawn, vitest, vueRoutes, pythonImports, externalServices, external, custom }) => [
+  // Example: events on a shared emitter, matched by name.
+  // link({
+  //   kind: 'event',
+  //   in: 'src/server',
+  //   call: 'bus.emit({key}',
+  //   answer: 'bus.on({key}',
+  //   why: 'Server modules tell each other about changes on one event bus.',
+  // }),
+];
+`;
+const MAP_NEXT_STEPS = (file) => `
+Wrote ${file}. It has no rules yet, so the map is the generic one.
+
+Next steps:
+  1. Read the primitives:  sinopia map docs
+  2. Save a baseline:      sinopia check --adapter auto --json > /tmp/sinopia-baseline.json
+  3. Add a rule for each way the code connects that imports don't show
+     (RPC, events, HTTP between your own apps, spawned processes, routes).
+  4. Run \`sinopia check\` until it passes and the numbers stop improving.
+     It lists what each rule found.
+  5. Commit ${file} with the repo.
+`;
+export const mapInit = ({ repo, force }) => {
+    const file = join(repo, LOCAL_MAP);
+    if (existsSync(file) && !force) {
+        console.error(`${file} already exists; --force replaces it.`);
+        process.exitCode = 1;
+        return;
+    }
+    mkdirSync(dirname(file), { recursive: true });
+    writeFileSync(file, mapTemplate(basename(repo), new Date().toISOString().slice(0, 10)));
+    console.log(MAP_NEXT_STEPS(LOCAL_MAP));
+    if (existsSync(join(repo, LOCAL_ADAPTER))) {
+        console.log(`Note: ${LOCAL_ADAPTER} exists too, and wins while it does. Move what it adds into the map, then delete it.`);
+    }
+};
 export const adapterInit = ({ repo, mode, force, }) => {
     const file = join(repo, LOCAL_ADAPTER);
     if (existsSync(file) && !force) {

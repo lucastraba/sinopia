@@ -6,7 +6,7 @@ It started as Helu Map, inspired by [Floorplan](https://github.com/haydenschmitt
 
 Ownership: parts of the core were first written in Helu's frontend repo; Helu confirmed in writing on 2026-11-21 that Sinopia belongs to its author.
 
-Each repo can carry its own adapter (`.sinopia/adapter.mjs`), written by its developers or their agent, for the links a generic scan can't see. Sinopia ships the core, two generic adapters and the instructions for writing one: [`docs/adapters.md`](docs/adapters.md).
+Each repo can say where its own links are, the ones a generic scan can't see (RPC calls, events, HTTP between its apps, spawned processes). That's `.sinopia/map.mjs`: a short list of rules a person can read in review, each saying where to look, what the call looks like and why, written by the repo's developers or their agent. Sinopia does the parsing and matching: [`docs/map.md`](docs/map.md). For what rules can't say, a repo can carry a full adapter instead: [`docs/adapters.md`](docs/adapters.md).
 
 ## Install
 
@@ -31,7 +31,7 @@ You need Node 22 or newer, git, and Claude Code logged in. It runs on macOS and 
 
 1. Install the CLI and the plugin (above), then open Claude Code in your repo.
 2. Ask for a map ("make a sinopia map of this repo"). The `sinopia` skill scans the code (free, seconds) and runs `sinopia check`, which says how connected the map is.
-3. If `check` shows many isolated files, or your code talks across boundaries that imports don't show (RPC, sockets, queues, generated clients, another language), ask Claude to write a sinopia adapter. The `sinopia-adapter` skill writes `.sinopia/adapter.mjs` and keeps going until `check` passes and stops improving. Commit that file.
+3. If `check` shows many isolated files, or your code talks across boundaries that imports don't show (RPC, sockets, queues, generated clients, another language), ask Claude to map them. The `sinopia-adapter` skill writes `.sinopia/map.mjs`, marks every rule it wrote as a draft, and keeps going until `check` passes and stops improving. Read the rules, delete `draft: true` from the ones you agree with, and commit the file.
 4. Describe: `sinopia describe --estimate` shows how much code there is, then `sinopia describe` writes the descriptions. With Sonnet, a 30-file repo costs well under a dollar at API prices and a 300-file repo three or four; on a Claude subscription it counts against your usage limits instead.
 5. Look at it: `sinopia serve`, then open http://127.0.0.1:8400. Later, `sinopia refresh` updates the map after new commits and only describes files that changed.
 
@@ -42,7 +42,9 @@ What leaves your machine: only `describe` sends code to Claude, through your own
 ```bash
 sinopia scan [repo]        # graph.json and the validation report
 sinopia check [repo]       # errors and coverage, without saving; --json for agents
-sinopia adapter init [repo]   # .sinopia/adapter.mjs from the generic adapter, plus next steps
+sinopia map init [repo]    # an empty .sinopia/map.mjs, plus next steps
+sinopia map docs           # the rules and their primitives
+sinopia adapter init [repo]   # .sinopia/adapter.mjs, full code, for what rules can't say
 sinopia adapter docs       # the adapter interface
 sinopia describe [repo]    # descriptions with claude -p; --estimate prints the cost first
 sinopia diff [repo] [--head <ref>] [--base <ref>]
@@ -50,14 +52,15 @@ sinopia refresh [repo]     # scan and describe if HEAD moved since the last refr
 sinopia serve --host <tailscale ip> [--port 8400]   # every map at /p/<name>/
 ```
 
-Maps go to `$SINOPIA_HOME/maps/<name>` (default `~/.local/share/sinopia/maps`). `--adapter auto|js|plain|<file>` picks how a repo is read; `auto` uses the repo's `.sinopia/adapter.mjs` when it has one, else `js` when most code is JS/TS and there's a `package.json`, `plain` otherwise. `SINOPIA_CLAUDE` points at the `claude` CLI where it isn't on PATH (systemd units).
+Maps go to `$SINOPIA_HOME/maps/<name>` (default `~/.local/share/sinopia/maps`). `--adapter auto|js|plain|<file>` picks how a repo is read; `auto` uses the repo's `.sinopia/adapter.mjs` or `.sinopia/map.mjs` when it has one (the adapter when it has both), else `js` when most code is JS/TS and there's a `package.json`, `plain` otherwise. A file passed by path counts as a map when its name is `map.mjs` or ends in `.map.mjs` or `-map.mjs` (`roadmap.mjs` is read as an adapter). `SINOPIA_CLAUDE` points at the `claude` CLI where it isn't on PATH (systemd units).
 
 ## Layout
 
 - `src/model.ts`: the graph. `meta` carries a map's title, part groups and optional sections (server calls, screens, a POC-style boundary, a component library), so diff and the viewer don't know any one stack.
 - `src/adapter.ts`: the interface an adapter implements and its version (`ADAPTER_INTERFACE_VERSION`); `docs/adapters.md` documents it. Bump the version for any change an existing adapter must follow, and add the upgrade steps to that doc.
 - `src/loadAdapter.ts`, `src/adapterInit.ts`: picking and loading a project's adapter, and scaffolding one.
-- `src/links.ts`, `src/coverage.ts`: every link out of a file (imports, components, adapter links), and the coverage numbers `check` prints.
+- `src/rules/`: map rules. `template.ts` compiles call shapes (`'ee.emit({key}'`) to matchers; `parse.ts` holds the shared text helpers; `link.ts`, `trpc.ts`, `http.ts` and `tools.ts` are the primitives; `index.ts` loads `.sinopia/map.mjs` into an adapter and records what each rule did in `meta.rules`.
+- `src/links.ts`, `src/coverage.ts`: every link out of a file (imports, components, adapter links), and the coverage numbers and rule report `check` prints.
 - `src/adapters/folders.ts`: `js` (folders as parts, imports from dependency-cruiser without a config) and `plain` (folders and files, no links, for Lua, shell and Python repos).
 - `src/cli.ts`: `runCli`, the commands every map has; a project with its own adapter (Helu's frontend) calls it from its own CLI.
 - `src/describe/`, `src/diff/`, `src/validate.ts`, `src/serve.ts`: describe, diff, the graph checks, and the HTTP server.

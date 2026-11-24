@@ -20,13 +20,13 @@ npm install -g --install-links github:lucastraba/sinopia
 Run these from the repo, or pass its path as the first argument.
 
 1. `sinopia scan` reads the code and writes `graph.json`. It's free and takes seconds. It prints the parts, the file count and the validation findings.
-2. `sinopia check` prints the same findings plus coverage: how many code files have no link in or out, links by kind, part-to-part links. Read it before describing. If most files are isolated, or the repo talks across boundaries that imports don't show (RPC, sockets, queues, generated clients), the generic adapter misses that structure: offer the `sinopia-adapter` skill before spending money on descriptions. A map with the wrong structure gets descriptions that are wrong about how things connect.
+2. `sinopia check` prints the same findings plus coverage: how many code files have no link in or out, links by kind, part-to-part links. Read it before describing. If most files are isolated, or the repo talks across boundaries that imports don't show (RPC, sockets, queues, generated clients), the generic scan misses that structure: offer the `sinopia-adapter` skill, which writes map rules for it, before spending money on descriptions. With map rules, `check` also lists each rule, what it found, and which rules are drafts nobody confirmed. A map with the wrong structure gets descriptions that are wrong about how things connect.
 3. `sinopia describe --estimate` prints how much code needs describing. Tell the user the rough cost before the real run: with Sonnet, about $0.25 to $0.40 per 100k characters of code at API prices. A 30-file repo costs well under a dollar; a 300-file repo three or four dollars.
 4. `sinopia describe` writes the descriptions. It runs `claude -p` with no tools, part by part, and saves after each part, so an interrupted run keeps what it finished.
 
 Maps live in `$SINOPIA_HOME/maps/<name>` (default `~/.local/share/sinopia/maps/<repo folder>`): `graph.json`, `descriptions.json`, `gaps.txt` and `project.json`. `--name` changes the name and `--out` the folder.
 
-How a repo is read: `--adapter auto` (the default) uses the repo's own `.sinopia/adapter.mjs` when it has one, otherwise the generic `js` adapter (folders as parts, JS/TS imports) when most code is JS/TS, otherwise `plain` (folders and files, no links).
+How a repo is read: `--adapter auto` (the default) uses the repo's own `.sinopia/adapter.mjs` or `.sinopia/map.mjs` when it has one, otherwise the generic `js` adapter (folders as parts, JS/TS imports) when most code is JS/TS, otherwise `plain` (folders and files, no links).
 
 ## Keep it current
 
