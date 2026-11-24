@@ -49,10 +49,40 @@ export const stripJsComments = (text) => {
     }
     return out;
 };
-/** Python text with `#` comments and triple-quoted strings (docstrings) blanked out. */
-export const stripPy = (text) => text
-    .replace(/("""|''')[\s\S]*?\1/g, (s) => s.replace(/[^\n]/g, ' '))
-    .replace(/(^|[^"'\w])#[^\n]*/g, '$1');
+/**
+ * Python text with `#` comments and triple-quoted strings (docstrings) blanked
+ * out, offsets kept. Strings are read first, so a `#` inside one stays.
+ */
+export const stripPy = (text) => {
+    let out = '';
+    let i = 0;
+    while (i < text.length) {
+        const c = text[i];
+        const triple = text.slice(i, i + 3);
+        if (triple === '"""' || triple === "'''") {
+            const end = text.indexOf(triple, i + 3);
+            const stop = end === -1 ? text.length : end + 3;
+            out += text.slice(i, stop).replace(/[^\n]/g, ' ');
+            i = stop;
+        }
+        else if (c === '#') {
+            const end = text.indexOf('\n', i);
+            const stop = end === -1 ? text.length : end;
+            out += ' '.repeat(stop - i);
+            i = stop;
+        }
+        else if (c === "'" || c === '"') {
+            const stop = skipString(text, i);
+            out += text.slice(i, stop);
+            i = stop;
+        }
+        else {
+            out += c;
+            i++;
+        }
+    }
+    return out;
+};
 /** Comments blanked out, by the file's language. Other files come back unchanged. */
 export const stripComments = (id, text) => {
     if (id.endsWith('.py'))

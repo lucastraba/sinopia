@@ -5,7 +5,7 @@ import { UsageError } from './args.js';
 import { LOCAL_ADAPTER } from './adapterInit.js';
 import { autoAdapter, folderAdapter } from './adapters/folders.js';
 import { LOCAL_MAP, mapAdapter } from './rules/index.js';
-/** A map file holds rules (`.sinopia/map.mjs`, or any `*map.mjs` passed with --adapter); anything else is an adapter module. */
+/** A map file holds rules (`.sinopia/map.mjs`, or a `map.mjs`, `*.map.mjs` or `*-map.mjs` passed with --adapter); anything else is an adapter module. */
 const isMapFile = (file) => /(^|[.-])map\.mjs$/.test(basename(file));
 /**
  * Loads a project's adapter module. Its default export is

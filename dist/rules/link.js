@@ -1,17 +1,65 @@
 import { checkOptions, describeScope, makeRule, templatesOf } from './context.js';
-import { lineOf } from './parse.js';
+import { lineOf, matchBracket, skipString } from './parse.js';
 import { matchAll } from './template.js';
 const KEYS = ['kind', 'in', 'from', 'to', 'call', 'answer', 'wrappers', 'labels'];
 const keysOf = (templates, text) => matchAll(templates, text).flatMap((m) => {
     const key = m.values.key;
     return key ? [{ ...key, index: m.index }] : [];
 });
-/** `export const name =` / `export function name(` declarations, each with the text up to the next export. */
+/** Index just past the expression starting at `from`: the next `;`, `,` or line break outside brackets and strings. */
+const expressionEnd = (text, from) => {
+    let i = from;
+    while (i < text.length && /\s/.test(text[i]))
+        i++;
+    while (i < text.length) {
+        const c = text[i];
+        if (c === "'" || c === '"' || c === '`')
+            i = skipString(text, i);
+        else if (c === '(' || c === '{' || c === '[')
+            i = matchBracket(text, i) + 1;
+        else if (c === ';' || c === ',' || c === '\n' || c === ')' || c === '}' || c === ']')
+            return i;
+        else
+            i++;
+    }
+    return i;
+};
+/** Where the body of the function whose parameters start at `paren` ends, or null when no body follows. */
+const bodyEnd = (text, paren, arrow) => {
+    let i = matchBracket(text, paren) + 1;
+    // Skip a return type: `(): void {`, `(): Promise<void> =>`.
+    const rest = text.slice(i);
+    const head = arrow ? /^\s*(?::[^=;{]*?)?\s*=>\s*/.exec(rest) : /^\s*(?::[^{;]*?)?\s*(?=\{)/.exec(rest);
+    if (!head)
+        return null;
+    i += head[0].length;
+    if (text[i] === '{')
+        return matchBracket(text, i) + 1;
+    return arrow ? expressionEnd(text, i) : null;
+};
+/**
+ * Exported functions: `export function name(`, and `export const name =` an
+ * arrow function or a function expression. Each comes with its body, so a
+ * call after it is a call of the file's own.
+ */
 const exportedFunctions = (text) => {
     const out = [];
-    for (const m of text.matchAll(/export\s+(?:async\s+)?(?:const|function)\s+([A-Za-z_$][\w$]*)/g)) {
-        const next = text.indexOf('export ', m.index + m[0].length);
-        out.push({ name: m[1], start: m.index, end: next === -1 ? text.length : next });
+    const declared = /export\s+(?:default\s+)?(?:async\s+)?function\s*\*?\s*([A-Za-z_$][\w$]*)\s*(?:<[^>]*>\s*)?\(/g;
+    for (const m of text.matchAll(declared)) {
+        const end = bodyEnd(text, m.index + m[0].length - 1, false);
+        if (end !== null)
+            out.push({ name: m[1], start: m.index, end });
+    }
+    const valued = /export\s+(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*(?::[^=]*)?=\s*(?:async\s+)?(?:function\s*\*?\s*(?:[A-Za-z_$][\w$]*)?\s*(\()|(?:<[^>]*>\s*)?(\()|([A-Za-z_$][\w$]*)\s*=>)/g;
+    for (const m of text.matchAll(valued)) {
+        let end;
+        if (m[4] !== undefined)
+            end = expressionEnd(text, m.index + m[0].length);
+        // Null for `= (a + b)`: a parenthesized expression has no `=>` after it, so it's no function.
+        else
+            end = bodyEnd(text, m.index + m[0].length - 1, m[2] === undefined);
+        if (end !== null)
+            out.push({ name: m[1], start: m.index, end });
     }
     return out;
 };
@@ -69,8 +117,9 @@ export const link = (options) => {
                 }
             }
         }
-        // Helpers that make the call for their callers.
-        const helpers = new Map();
+        // Helpers that make the call for their callers, each with the file that defines it:
+        // two helpers with the same name in two files are two helpers.
+        const helpers = [];
         const helperBodies = new Map();
         if (options.wrappers) {
             for (const file of callers) {
@@ -79,7 +128,7 @@ export const link = (options) => {
                     const keys = keysOf(calls, text.slice(fn.start, fn.end));
                     if (keys.length === 0)
                         continue;
-                    helpers.set(fn.name, { file: file.id, keys: new Set(keys.map((k) => k.value)) });
+                    helpers.push({ name: fn.name, file: file.id, keys: new Set(keys.map((k) => k.value)) });
                     helperBodies.set(file.id, [...(helperBodies.get(file.id) ?? []), fn]);
                 }
             }
@@ -94,7 +143,7 @@ export const link = (options) => {
                 if (!made.has(key.value))
                     made.set(key.value, key.index);
             }
-            for (const [name, { file: helperFile, keys }] of helpers) {
+            for (const { name, file: helperFile, keys } of helpers) {
                 // With imports known (not the plain adapter), only the helper's importers call it.
                 if (ctx.graph.meta.hasLinks && file.id !== helperFile && !file.imports.includes(helperFile))
                     continue;

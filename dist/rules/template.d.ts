@@ -6,6 +6,8 @@ export interface Capture {
 export interface TemplateMatch {
     index: number;
     end: number;
+    /** True when a regular expression matched: its captures say nothing about quotes. */
+    raw: boolean;
     values: Record<string, Capture>;
 }
 export interface CompiledTemplate {

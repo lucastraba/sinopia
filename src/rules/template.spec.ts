@@ -6,6 +6,11 @@ const keys = (template: string | RegExp, text: string) =>
     .map((m) => m.values.key?.value);
 
 describe('compileTemplate', () => {
+  it('says whether a regular expression or a string template matched', () => {
+    expect(compileTemplate(/get\('(?<path>[^']+)'/).match("get('/a')")[0]).toEqual(expect.objectContaining({ raw: true, values: { path: { value: '/a', quoted: false } } }));
+    expect(compileTemplate('get({path}').match("get('/a')")[0]?.raw).toBe(false);
+  });
+
   it('captures an identifier or a string literal as {key}', () => {
     expect(keys('ee.emit({key}', 'ee.emit(COUNTER_UPDATE, 1)')).toEqual(['COUNTER_UPDATE']);
     expect(keys('ee.emit({key}', `ee.emit('counter.update')`)).toEqual(['counter.update']);

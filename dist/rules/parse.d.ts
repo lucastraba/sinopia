@@ -2,7 +2,10 @@
 export declare const skipString: (text: string, i: number) => number;
 /** JS/TS text with comments blanked out. Strings are kept. */
 export declare const stripJsComments: (text: string) => string;
-/** Python text with `#` comments and triple-quoted strings (docstrings) blanked out. */
+/**
+ * Python text with `#` comments and triple-quoted strings (docstrings) blanked
+ * out, offsets kept. Strings are read first, so a `#` inside one stays.
+ */
 export declare const stripPy: (text: string) => string;
 /** Comments blanked out, by the file's language. Other files come back unchanged. */
 export declare const stripComments: (id: string, text: string) => string;

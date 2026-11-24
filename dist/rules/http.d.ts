@@ -16,6 +16,8 @@ export interface HttpOptions extends CommonOptions {
  * - interpolated strings built on a base, `f"{cfg.url}/control/voice"` or `${base}/api/x`;
  * - the same through a variable holding one, `f"{self._endpoint}/roster"`;
  * - a path literal of two or more segments passed as an argument, `send("/ingest/subtitle", …)`.
+ * A variable that holds a base (`BASE = f"{url}/api"`) is only a call where
+ * code passes it on as it is: `httpx.get(BASE)`.
  */
 export declare const calledPaths: (text: string) => Set<string>;
 export declare const http: (options: HttpOptions) => Rule;

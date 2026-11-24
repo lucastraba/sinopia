@@ -2,7 +2,8 @@ import { checkOptions, describeScope, makeRule } from './context.js';
 import { lineOf, objectEntries } from './parse.js';
 const KEYS = ['routers', 'callers', 'client', 'router', 'procedure', 'connection'];
 const list = (value) => (Array.isArray(value) ? value : [value]);
-const words = (values) => values.map((v) => v.replace(/[.$]/g, '\\$&')).join('|');
+const escapeRegExp = (text) => text.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&');
+const words = (values) => values.map(escapeRegExp).join('|');
 const SCRIPT = /\.(m?[jt]s|vue)$/;
 /** Every procedure path (`counters.increment`) with the file that declares it. */
 const procedures = (ctx, options) => {
@@ -49,11 +50,17 @@ const procedures = (ctx, options) => {
             }
         }
     };
-    for (const r of routers.values()) {
-        for (const entry of objectEntries(r.text, r.open))
+    // A router used by another, at any depth (`api: t.router({ leaf })`), is not a root.
+    const collect = (text, open) => {
+        for (const entry of objectEntries(text, open)) {
             if (isRouterName(entry.value))
                 referenced.add(entry.value);
-    }
+            else if (nestedRouter.test(entry.value))
+                collect(text, text.indexOf('{', entry.start));
+        }
+    };
+    for (const r of routers.values())
+        collect(r.text, r.open);
     for (const [name, r] of routers)
         if (!referenced.has(name))
             walk(r.file, r.text, r.open, '', new Set([name]));
@@ -61,7 +68,7 @@ const procedures = (ctx, options) => {
 };
 export const trpc = (options) => {
     checkOptions('trpc', options, KEYS);
-    if (!options.routers)
+    if (options.routers === undefined)
         throw new Error("trpc(): 'routers' is required: the folder where the server declares its routers");
     const client = options.client ?? 'trpc';
     const router = options.router ?? 't.router';
@@ -72,8 +79,10 @@ export const trpc = (options) => {
         const callers = ctx
             .files(options.callers)
             .filter((file) => SCRIPT.test(file.id) && (options.callers !== undefined || !ctx.inScope(file.id, options.routers)));
-        const imports = new RegExp(`import\\s+(?:type\\s+)?\\{[^}]*\\b${client}\\b[^}]*\\}\\s+from`);
-        const call = new RegExp(`(?<![\\w$.])${client}((?:\\s*\\.\\s*[A-Za-z_$][\\w$]*)+)`, 'g');
+        // The client is a literal name, `$trpc` included: escaped, with identifier boundaries.
+        const name = escapeRegExp(client);
+        const imports = new RegExp(`import\\s+(?:type\\s+)?\\{[^}]*(?<![\\w$])${name}(?![\\w$])[^}]*\\}\\s+from`);
+        const call = new RegExp(`(?<![\\w$.])${name}((?:\\s*\\.\\s*[A-Za-z_$][\\w$]*)+)`, 'g');
         if (procs.size > 0) {
             for (const file of callers) {
                 if (!imports.test(ctx.read(file.id)))
@@ -122,7 +131,7 @@ export const trpc = (options) => {
         }
         // The client names the path itself or through a file it imports (the URL builder).
         const mentions = (file, path) => {
-            const re = new RegExp(`${path.replace(/[/.]/g, '\\$&')}(?![\\w/-])`);
+            const re = new RegExp(`${escapeRegExp(path)}(?![\\w/-])`);
             return [file.id, ...file.imports].some((id) => ctx.ids.has(id) && re.test(ctx.code(id)));
         };
         for (const file of callers) {

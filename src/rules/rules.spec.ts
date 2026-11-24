@@ -49,6 +49,14 @@ describe('parse helpers', () => {
     expect(stripPy('x = 1  # note\n"""doc\nstring"""\ny = "#kept"')).not.toMatch(/note|doc/);
     expect(stripPy('y = "#kept"')).toContain('#kept');
   });
+
+  it('keeps a # inside a Python string, and the code after it, at the same offsets', () => {
+    const py = 'label = "a # b"; ee.emit("paid")  # note';
+    const out = stripPy(py);
+    expect(out).toHaveLength(py.length);
+    expect(out).toContain('label = "a # b"; ee.emit("paid")');
+    expect(out).not.toContain('note');
+  });
 });
 
 describe('calledPaths', () => {
@@ -59,7 +67,18 @@ describe('calledPaths', () => {
       'self._send("/ingest/subtitle", payload)',
       'open("/tmp")',
     ].join('\n');
-    expect([...calledPaths(py)].sort()).toEqual(['/control/voice', '/control/voice/roster', '/ingest/subtitle']);
+    expect([...calledPaths(py)].sort()).toEqual(['/control/voice/roster', '/ingest/subtitle']);
+  });
+
+  it('counts a base variable only where code passes it on as it is', () => {
+    const py = ['self._endpoint = f"{cfg.url}/control/voice"', 'self._client.get(\n  self._endpoint,\n)', 'BASE = f"{url}/api"', 'httpx.get(f"{BASE}/items")'].join('\n');
+    expect([...calledPaths(py)].sort()).toEqual(['/api/items', '/control/voice']);
+  });
+
+  it('takes the path of an interpolated call on a base it does not know', () => {
+    expect([...calledPaths('httpx.post(f"{cfg.url}/control/voice")')]).toEqual(['/control/voice']);
+    expect([...calledPaths('fetch(`${base}/api/x`)')]).toEqual(['/api/x']);
+    expect([...calledPaths('httpx.get(url=f"{cfg.url}/health")')]).toEqual(['/health']);
   });
 });
 
@@ -105,7 +124,61 @@ export default ({ link, custom }) => [
     expect(report).toMatch(/\[draft, 1 regex\]/);
     expect(report).toMatch(/Drafts: rule 1,/);
     expect(report).toMatch(/Regular expressions: 1 call shape/);
-    expect(report).toMatch(/Custom code: 1 of 2 links \(50\.0%\)/);
+    expect(report).toMatch(/Custom code: 1 of 2 links besides imports \(50\.0%\)/);
+  });
+
+  it('leaves imports out of the custom-code share', async () => {
+    const graph = await scan(
+      bus,
+      `export const base = 'plain';
+export default ({ link, custom }) => [
+  link({ kind: 'event', in: 'src', call: 'ee.emit({key}', answer: 'ee.on({key}', wrappers: true }),
+  custom({ name: 'stray', run: (ctx) => {
+    ctx.addLink(ctx.byId.get('src/stray.ts'), { target: 'src/bus.ts', kind: 'uses', label: null });
+    for (const id of ['src/bus.ts', 'src/mailer.ts', 'src/checkout.ts']) ctx.addImport(ctx.byId.get('src/stray.ts'), id);
+  } }),
+];`
+    );
+    expect(formatRules(graph.meta.rules ?? []).join('\n')).toMatch(/Custom code: 1 of 2 links besides imports \(50\.0%\)/);
+  });
+
+  it('counts only function bodies as helpers, so calls after them stay the file\'s own', async () => {
+    const graph = await scan(
+      {
+        'src/bus.ts': [
+          'export const bus = new EventEmitter();',
+          "bus.emit('ready');",
+          'export function emitDone(id) {',
+          "  bus.emit('done', id);",
+          '}',
+          "bus.emit('started');",
+          "export const emitLater = async (id): Promise<void> => { bus.emit('later', id); };",
+        ].join('\n'),
+        'src/app.ts': "import { emitDone } from './bus';\nemitDone(1);",
+        'src/listen.ts': "bus.on('ready', f);\nbus.on('done', f);\nbus.on('started', f);\nbus.on('later', f);",
+      },
+      `export const base = 'plain';\nexport default ({ link }) => [link({ kind: 'event', in: 'src', call: 'bus.emit({key}', answer: 'bus.on({key}', wrappers: true })];`
+    );
+    expect(links(graph)).toEqual([
+      'src/app.ts -> src/listen.ts [event] done',
+      'src/bus.ts -> src/listen.ts [event] ready',
+      'src/bus.ts -> src/listen.ts [event] started',
+    ]);
+  });
+
+  it('keeps helpers with the same name in two files apart', async () => {
+    const graph = await scan(
+      {
+        'package.json': '{}',
+        'src/a.ts': "export const notify = () => ee.emit('a.done');",
+        'src/b.ts': "export const notify = () => ee.emit('b.done');",
+        'src/useA.ts': "import { notify } from './a';\nnotify();",
+        'src/useB.ts': "import { notify } from './b';\nnotify();",
+        'src/listen.ts': "ee.on('a.done', f);\nee.on('b.done', f);",
+      },
+      `export const base = 'js';\nexport default ({ link }) => [link({ kind: 'event', in: 'src', call: 'ee.emit({key}', answer: 'ee.on({key}', wrappers: true })];`
+    );
+    expect(links(graph)).toEqual(['src/useA.ts -> src/listen.ts [event] a.done', 'src/useB.ts -> src/listen.ts [event] b.done']);
   });
 
   it('fails loudly on an option a primitive does not know', async () => {
@@ -130,11 +203,20 @@ export default ({ http }) => [
   http({ server: 'server', clients: 'client', routes: ['req.url === {path} && req.method === {method}', 'req.url === {path}'] }),
 ];`
     );
-    expect(links(graph)).toEqual(['client/sync.py -> server/main.ts [http] POST /api/items']);
-    expect(graph.gaps.filter((g) => g.kind === 'unmatched-http').map((g) => g.detail).sort()).toEqual([
-      '/api matches no server route',
-      '/api/missing matches no server route',
-    ]);
+    expect(links(graph)).toEqual(['client/sync.py -> server/main.ts [http] /health', 'client/sync.py -> server/main.ts [http] POST /api/items']);
+    expect(graph.gaps.filter((g) => g.kind === 'unmatched-http').map((g) => g.detail)).toEqual(['/api/missing matches no server route']);
+  });
+
+  it('takes routes declared by a regular expression, and an empty scope as the whole repo', async () => {
+    const graph = await scan(
+      {
+        'server/main.ts': "app.get('/api/items', f);",
+        'client/sync.py': 'import httpx\nhttpx.get(f"{cfg.url}/api/items")',
+      },
+      `export const base = 'plain';
+export default ({ http }) => [http({ server: 'server', clients: '', routes: /app\\.(?<method>get|post)\\('(?<path>[^']+)'/ })];`
+    );
+    expect(links(graph)).toEqual(['client/sync.py -> server/main.ts [http] GET /api/items']);
   });
 
   it('follows nested tRPC routers to the file that declares each procedure', async () => {
@@ -151,6 +233,58 @@ export default ({ http }) => [
       'app/button.ts -> server/routers/counter.ts [trpc] counter.increment',
     ]);
     expect(graph.gaps.find((g) => g.kind === 'unmatched-trpc')?.detail).toMatch(/trpc\.counter\.reset\.mutate .* matches no procedure/);
+  });
+
+  it('roots tRPC paths only at routers nothing uses, at any depth', async () => {
+    const graph = await scan(
+      {
+        'server/leaf.ts': 'export const leaf = t.router({ ping: t.procedure.query(() => 1) });',
+        // After leaf.ts, so leaf is seen before the router that uses it.
+        'server/root.ts': 'export const appRouter = t.router({ api: t.router({ leaf: leaf }) });',
+        'app/call.ts': "import { trpc } from './trpc';\ntrpc.api.leaf.ping.query();\ntrpc.ping.query();",
+      },
+      `export const base = 'plain';\nexport default ({ trpc }) => [trpc({ routers: 'server', connection: false })];`
+    );
+    expect(links(graph)).toEqual(['app/call.ts -> server/leaf.ts [trpc] api.leaf.ping']);
+    expect(graph.gaps.find((g) => g.kind === 'unmatched-trpc')?.detail).toMatch(/^trpc\.ping\.query /);
+  });
+
+  it('reads the tRPC client name and mount path literally', async () => {
+    const graph = await scan(
+      {
+        'server/router.ts': 'export const appRouter = t.router({ ping: t.procedure.query(() => 1) });',
+        'server/main.ts': "const handler = createHTTPHandler({ router });\nif (req.url?.startsWith('/trpc(v1)')) { handler(req, res); }",
+        'app/client.ts': "export const $trpc = createTRPCClient({ links: [httpBatchLink({ url: '/trpc(v1)' })] });",
+        'app/call.ts': "import { $trpc } from './client';\n$trpc.ping.query();",
+      },
+      `export const base = 'plain';\nexport default ({ trpc }) => [trpc({ routers: 'server', client: '$trpc' })];`
+    );
+    expect(links(graph)).toEqual([
+      'app/call.ts -> server/router.ts [trpc] ping',
+      'app/client.ts -> server/main.ts [http] /trpc(v1) (tRPC over HTTP)',
+    ]);
+  });
+
+  it('links Python imports by name: aliases, and a package next to its submodules', async () => {
+    const graph = await scan(
+      {
+        'app/main.py': 'from pkg import helper, VERSION\nimport alpha as a, beta as b\n',
+        'app/pkg/__init__.py': 'VERSION = 1',
+        'app/pkg/helper.py': 'x = 1',
+        'app/alpha.py': 'x = 1',
+        'app/beta.py': 'x = 1',
+      },
+      `export const base = 'plain';\nexport default ({ pythonImports }) => [pythonImports()];`
+    );
+    expect(graph.files.find((f) => f.id === 'app/main.py')?.imports.sort()).toEqual(['app/alpha.py', 'app/beta.py', 'app/pkg/__init__.py', 'app/pkg/helper.py']);
+  });
+
+  it('notes a URL constant passed to fetch as it is', async () => {
+    const graph = await scan(
+      { 'src/api.ts': "const API = 'https://example.com';\nexport const load = () => fetch(API);" },
+      `export const base = 'plain';\nexport default ({ externalServices }) => [externalServices({ names: { Example: 'example.com' } })];`
+    );
+    expect(graph.gaps.filter((g) => g.kind === 'external-service').map((g) => g.detail)).toEqual(['fetch https://example.com / (Example)']);
   });
 
   it('links mentions of a declared name when there is no call shape', async () => {

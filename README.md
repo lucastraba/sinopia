@@ -52,7 +52,7 @@ sinopia refresh [repo]     # scan and describe if HEAD moved since the last refr
 sinopia serve --host <tailscale ip> [--port 8400]   # every map at /p/<name>/
 ```
 
-Maps go to `$SINOPIA_HOME/maps/<name>` (default `~/.local/share/sinopia/maps`). `--adapter auto|js|plain|<file>` picks how a repo is read; `auto` uses the repo's `.sinopia/adapter.mjs` or `.sinopia/map.mjs` when it has one (the adapter when it has both), else `js` when most code is JS/TS and there's a `package.json`, `plain` otherwise. A file passed by path counts as a map when its name ends in `map.mjs`. `SINOPIA_CLAUDE` points at the `claude` CLI where it isn't on PATH (systemd units).
+Maps go to `$SINOPIA_HOME/maps/<name>` (default `~/.local/share/sinopia/maps`). `--adapter auto|js|plain|<file>` picks how a repo is read; `auto` uses the repo's `.sinopia/adapter.mjs` or `.sinopia/map.mjs` when it has one (the adapter when it has both), else `js` when most code is JS/TS and there's a `package.json`, `plain` otherwise. A file passed by path counts as a map when its name is `map.mjs` or ends in `.map.mjs` or `-map.mjs` (`roadmap.mjs` is read as an adapter). `SINOPIA_CLAUDE` points at the `claude` CLI where it isn't on PATH (systemd units).
 
 ## Layout
 

@@ -19,6 +19,8 @@ export interface Capture {
 export interface TemplateMatch {
   index: number;
   end: number;
+  /** True when a regular expression matched: its captures say nothing about quotes. */
+  raw: boolean;
   values: Record<string, Capture>;
 }
 
@@ -68,6 +70,7 @@ export const compileTemplate = (template: string | RegExp): CompiledTemplate => 
         [...text.matchAll(regex)].map((m) => ({
           index: m.index,
           end: m.index + m[0].length,
+          raw: true,
           values: Object.fromEntries(
             Object.entries(m.groups ?? {})
               .filter(([, value]) => value !== undefined)
@@ -121,7 +124,7 @@ export const compileTemplate = (template: string | RegExp): CompiledTemplate => 
           if (quoted !== undefined) values[name] = { value: quoted, quoted: true };
           else if (ident !== undefined) values[name] = { value: ident.replace(/\s+/g, ''), quoted: false };
         });
-        return { index: m.index, end: m.index + m[0].length, values };
+        return { index: m.index, end: m.index + m[0].length, raw: false, values };
       }),
   };
 };

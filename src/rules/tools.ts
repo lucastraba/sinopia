@@ -40,21 +40,18 @@ export const pythonImports = (options: ScopeOptions = {}): Rule => {
           modFile = pythonModuleFile(ctx.ids, file.id, mod);
         }
         if (!modFile) continue; // a third-party or standard library module
-        // `from pkg import sub` may import a submodule.
-        let usedSub = false;
-        if (modFile.endsWith('/__init__.py')) {
-          const pkgDir = posix.dirname(modFile);
-          for (const name of names) {
-            if (ctx.ids.has(`${pkgDir}/${name}.py`)) {
-              add(`${pkgDir}/${name}.py`);
-              usedSub = true;
-            }
-          }
-        }
-        if (!usedSub) add(modFile);
+        // `from pkg import sub` may import a submodule. Each other name (and `*`) comes from the package itself.
+        const pkgDir = modFile.endsWith('/__init__.py') ? posix.dirname(modFile) : null;
+        const subs = pkgDir ? names.filter((name) => ctx.ids.has(`${pkgDir}/${name}.py`)) : [];
+        for (const name of subs) add(`${pkgDir}/${name}.py`);
+        if (subs.length === 0 || subs.length < names.length) add(modFile);
       }
-      for (const m of text.matchAll(/^[ \t]*import[ \t]+([\w.]+(?:[ \t]*,[ \t]*[\w.]+)*)/gm)) {
-        for (const mod of (m[1] as string).split(',').map((s) => s.trim())) add(pythonModuleFile(ctx.ids, file.id, mod));
+      // `import a, b.c as d`: every module in the list, aliases dropped.
+      for (const m of text.matchAll(/^[ \t]*import[ \t]+([^\n;]+)/gm)) {
+        for (const entry of (m[1] as string).split(',')) {
+          const mod = entry.trim().split(/\s+as\s+/)[0] ?? '';
+          if (/^[\w.]+$/.test(mod)) add(pythonModuleFile(ctx.ids, file.id, mod));
+        }
       }
     }
   });
@@ -198,6 +195,13 @@ export const externalServices = (options: ExternalServicesOptions = {}): Rule =>
         if (!calls.has(base)) calls.set(base, new Set());
         calls.get(base)?.add(rest || (dynamic ? `{${dynamic.slice(2, -1)}}` : '/'));
       }
+      // A URL constant passed as it is: `fetch(API)`.
+      for (const [, name] of text.matchAll(/\bfetch\(\s*([A-Z][A-Z0-9_]*)\s*[,)]/g)) {
+        const url = urls.get(name as string);
+        if (!url) continue;
+        if (!calls.has(url)) calls.set(url, new Set());
+        calls.get(url)?.add('/');
+      }
       for (const [base, paths] of calls) {
         ctx.addGap({ kind: 'external-service', level: 'info', file: file.id, detail: `fetch ${base} ${[...paths].sort().join(', ')}${named(base)}` });
       }
@@ -247,7 +251,7 @@ export interface DataFilesOptions extends CommonOptions {
  */
 export const dataFiles = (options: DataFilesOptions): Rule => {
   checkOptions('dataFiles', options, ['in', 'extensions', 'aliases']);
-  if (!options.in || !options.extensions?.length) throw new Error("dataFiles(): needs 'in' and 'extensions'");
+  if (options.in === undefined || !options.extensions?.length) throw new Error("dataFiles(): needs 'in' and 'extensions'");
   const extensions = options.extensions.map((ext) => ext.replace(/^\./, ''));
   const isData = new RegExp(`\\.(${extensions.map((ext) => ext.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|')})$`);
   const aliases = Object.entries(options.aliases ?? {})
@@ -293,7 +297,7 @@ export interface RunsOptions extends CommonOptions {
  */
 export const runs = (options: RunsOptions): Rule => {
   checkOptions('runs', options, ['from']);
-  if (!options.from) throw new Error("runs(): needs 'from'");
+  if (options.from === undefined) throw new Error("runs(): needs 'from'");
   const summary = `files named in ${describeScope(options.from)}, which start them`;
   return makeRule('runs', options, summary, [], (ctx) => {
     const runners = listFiles(ctx.input.root).filter((id) => ctx.inScope(id, options.from));

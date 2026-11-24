@@ -67,7 +67,7 @@ Most mechanisms are a call on one side and a handler on the other, matched by a 
 | `in` | Where both sides live. `from` and `to` narrow it per side. |
 | `call` | The calling shape(s), with `{key}`. Leave it out when files use the name without a call (a global exposed by name, a registry looked up by name): then a whole-word mention of a key the answering side declares counts. |
 | `answer` | The answering shape(s), with the same `{key}`. |
-| `wrappers` | `true`: calls made inside exported helpers (`export const emitPaid = () => ee.emit(PAID)`) count for the helper's callers, not for the helper's file. Only files that import the helper's file count. |
+| `wrappers` | `true`: calls made inside exported helper functions (`export function emitPaid()`, `export const emitPaid = () => ee.emit(PAID)`) count for the helper's callers, not for the helper's file. Only the function's body counts: a call after it is the file's own, and an exported object (`export const bus = new EventEmitter()`) is no helper. When the map knows imports, only files that import the helper's file count, so two helpers with the same name in two files stay apart. |
 | `labels` | `'constants'`: when the key is a constant (`ee.emit(PAID)`), label the link with its value from an `export const PAID = 'order.paid'` in the same files. |
 
 Each calling file gets a link to every other file that answers the same key. A key nothing answers is an `unmatched-<kind>` warning.
@@ -80,9 +80,9 @@ Options: `routers` (required), `callers` (default: everything outside `routers`)
 
 ### `http`: HTTP between your own apps
 
-`http({ server, clients, routes })` indexes the routes the server declares, then links client calls to them. `routes` are templates with `{path}` and optionally `{method}`: `"app.{method}({path}"`, `"req.url === {path} && req.method === {method}"`.
+`http({ server, clients, routes })` indexes the routes the server declares, then links client calls to them. `routes` are templates with `{path}` and optionally `{method}`: `"app.{method}({path}"`, `"req.url === {path} && req.method === {method}"`. A template's `{path}` must be a string literal; a regular expression's `path` group is taken as it is. An empty `server` or `clients` (`''`) is the whole repo.
 
-On the client side, a file counts when it uses an HTTP client (`fetch`, axios, httpx, requests, urllib, aiohttp, ky, got). The paths it calls are interpolated strings on a base (`f"{cfg.url}/items"`, `` `${base}/items` ``), the same through a variable that holds one, and path literals of two or more segments passed as an argument (`send("/ingest/subtitle", …)`). A path no route declares is an `unmatched-http` warning.
+On the client side, a file counts when it uses an HTTP client (`fetch`, axios, httpx, requests, urllib, aiohttp, ky, got). The paths it calls are interpolated strings on a base (`f"{cfg.url}/items"`, `` `${base}/items` ``), the same through a variable that holds one (`BASE = f"{url}/api"`, then `f"{BASE}/items"` calls `/api/items`; `BASE` alone counts only where it's passed on as it is, `httpx.get(BASE)`), and path literals of two or more segments passed as an argument (`send("/ingest/subtitle", …)`). A path no route declares is an `unmatched-http` warning.
 
 ### Tools and languages
 

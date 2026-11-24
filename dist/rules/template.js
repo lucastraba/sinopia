@@ -41,6 +41,7 @@ export const compileTemplate = (template) => {
             match: (text) => [...text.matchAll(regex)].map((m) => ({
                 index: m.index,
                 end: m.index + m[0].length,
+                raw: true,
                 values: Object.fromEntries(Object.entries(m.groups ?? {})
                     .filter(([, value]) => value !== undefined)
                     .map(([name, value]) => [name, { value: value, quoted: false }])),
@@ -99,7 +100,7 @@ export const compileTemplate = (template) => {
                 else if (ident !== undefined)
                     values[name] = { value: ident.replace(/\s+/g, ''), quoted: false };
             });
-            return { index: m.index, end: m.index + m[0].length, values };
+            return { index: m.index, end: m.index + m[0].length, raw: false, values };
         }),
     };
 };

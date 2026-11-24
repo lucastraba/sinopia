@@ -22,7 +22,8 @@ export interface TrpcOptions extends CommonOptions {
 
 const KEYS = ['routers', 'callers', 'client', 'router', 'procedure', 'connection'];
 const list = (value: string | string[]) => (Array.isArray(value) ? value : [value]);
-const words = (values: string[]) => values.map((v) => v.replace(/[.$]/g, '\\$&')).join('|');
+const escapeRegExp = (text: string) => text.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&');
+const words = (values: string[]) => values.map(escapeRegExp).join('|');
 const SCRIPT = /\.(m?[jt]s|vue)$/;
 
 /** Every procedure path (`counters.increment`) with the file that declares it. */
@@ -64,16 +65,21 @@ const procedures = (ctx: RuleContext, options: Required<Pick<TrpcOptions, 'route
       }
     }
   };
-  for (const r of routers.values()) {
-    for (const entry of objectEntries(r.text, r.open)) if (isRouterName(entry.value)) referenced.add(entry.value);
-  }
+  // A router used by another, at any depth (`api: t.router({ leaf })`), is not a root.
+  const collect = (text: string, open: number) => {
+    for (const entry of objectEntries(text, open)) {
+      if (isRouterName(entry.value)) referenced.add(entry.value);
+      else if (nestedRouter.test(entry.value)) collect(text, text.indexOf('{', entry.start));
+    }
+  };
+  for (const r of routers.values()) collect(r.text, r.open);
   for (const [name, r] of routers) if (!referenced.has(name)) walk(r.file, r.text, r.open, '', new Set([name]));
   return procs;
 };
 
 export const trpc = (options: TrpcOptions): Rule => {
   checkOptions('trpc', options, KEYS);
-  if (!options.routers) throw new Error("trpc(): 'routers' is required: the folder where the server declares its routers");
+  if (options.routers === undefined) throw new Error("trpc(): 'routers' is required: the folder where the server declares its routers");
   const client = options.client ?? 'trpc';
   const router = options.router ?? 't.router';
   const procedure = options.procedure ?? 't.procedure';
@@ -84,8 +90,10 @@ export const trpc = (options: TrpcOptions): Rule => {
     const callers = ctx
       .files(options.callers)
       .filter((file) => SCRIPT.test(file.id) && (options.callers !== undefined || !ctx.inScope(file.id, options.routers)));
-    const imports = new RegExp(`import\\s+(?:type\\s+)?\\{[^}]*\\b${client}\\b[^}]*\\}\\s+from`);
-    const call = new RegExp(`(?<![\\w$.])${client}((?:\\s*\\.\\s*[A-Za-z_$][\\w$]*)+)`, 'g');
+    // The client is a literal name, `$trpc` included: escaped, with identifier boundaries.
+    const name = escapeRegExp(client);
+    const imports = new RegExp(`import\\s+(?:type\\s+)?\\{[^}]*(?<![\\w$])${name}(?![\\w$])[^}]*\\}\\s+from`);
+    const call = new RegExp(`(?<![\\w$.])${name}((?:\\s*\\.\\s*[A-Za-z_$][\\w$]*)+)`, 'g');
 
     if (procs.size > 0) {
       for (const file of callers) {
@@ -129,7 +137,7 @@ export const trpc = (options: TrpcOptions): Rule => {
     }
     // The client names the path itself or through a file it imports (the URL builder).
     const mentions = (file: RuleContext['graph']['files'][number], path: string) => {
-      const re = new RegExp(`${path.replace(/[/.]/g, '\\$&')}(?![\\w/-])`);
+      const re = new RegExp(`${escapeRegExp(path)}(?![\\w/-])`);
       return [file.id, ...file.imports].some((id) => ctx.ids.has(id) && re.test(ctx.code(id)));
     };
     for (const file of callers) {

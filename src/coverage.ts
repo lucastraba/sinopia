@@ -87,7 +87,9 @@ export const coverageOf = (graph: Graph, adapter: string): Coverage => {
   };
 };
 
-const countOf = (links: Record<string, number>) => Object.values(links).reduce((sum, n) => sum + n, 0);
+/** Links a rule added, imports left out: the custom-code share is about the links imports don't show. */
+const countOf = (links: Record<string, number>) =>
+  Object.entries(links).reduce((sum, [kind, n]) => (kind === 'import' ? sum : sum + n), 0);
 
 /**
  * What each map rule found, then the three things a reviewer looks for:
@@ -117,7 +119,7 @@ export const formatRules = (rules: RuleReport[]): string[] => {
   if (regexes > 0) lines.push(`Regular expressions: ${regexes} call shape${regexes > 1 ? 's' : ''}; a template ('ee.emit({key}') reads better where one fits.`);
   const total = rules.reduce((sum, rule) => sum + countOf(rule.links), 0);
   const custom = rules.filter((rule) => rule.rule === 'custom').reduce((sum, rule) => sum + countOf(rule.links), 0);
-  if (custom > 0) lines.push(`Custom code: ${custom} of ${total} links (${((custom / total) * 100).toFixed(1)}%)`);
+  if (custom > 0) lines.push(`Custom code: ${custom} of ${total} links besides imports (${((custom / total) * 100).toFixed(1)}%)`);
   return lines;
 };
 
