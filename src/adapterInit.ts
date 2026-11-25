@@ -80,7 +80,7 @@ export const mapTemplate = (name: string, date: string): string => `// How ${nam
 //
 // A rule an agent wrote carries \`draft: true\` until a person confirms it.
 
-export default ({ link, trpc, http, spawn, vitest, vueRoutes, pythonImports, externalServices, external, custom }) => [
+export default ({ link, trpc, http, graphql, spawn, vitest, vueRoutes, vueComponents, globImports, pythonImports, dataFiles, runs, externalServices, external, custom }) => [
   // Example: events on a shared emitter, matched by name.
   // link({
   //   kind: 'event',

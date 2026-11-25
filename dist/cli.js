@@ -8,6 +8,7 @@ import { describe } from './describe/describe.js';
 import { diffGraphs } from './diff/diff.js';
 import { formatDiff } from './diff/format.js';
 import { ensureDir, exportSnapshot, git, resolveSha } from './repo.js';
+import { UsageError } from './args.js';
 import { serve } from './serve.js';
 import { summarizeGaps, validateGraph } from './validate.js';
 const usage = (command) => `${command} <command>
@@ -33,8 +34,15 @@ const scanAt = async (options, ref) => {
 };
 const adapterScan = async ({ adapter, repo, out }, ref) => {
     if (!ref) {
-        const head = git(repo, ['rev-parse', 'HEAD']);
-        const branch = git(repo, ['rev-parse', '--abbrev-ref', 'HEAD']);
+        let head;
+        let branch;
+        try {
+            head = git(repo, ['rev-parse', 'HEAD']);
+            branch = git(repo, ['rev-parse', '--abbrev-ref', 'HEAD']);
+        }
+        catch {
+            throw new UsageError(`${repo} has no commits yet. sinopia labels a map with the commit it read: commit once, then run it again.`);
+        }
         return adapter.scan({
             repo,
             root: repo,

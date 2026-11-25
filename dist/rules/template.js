@@ -11,6 +11,8 @@
 // because they're harder to read.
 /** An identifier or a member path of them: `FOO`, `IPC.readSaves`, `Events.order.paid`. */
 const IDENT_PATH = '[A-Za-z_$][\\w$]*(?:\\s*\\.\\s*[A-Za-z_$][\\w$]*)*';
+/** `<T>`, `<Map<K, V>>`: type arguments, nested two deep. */
+const TYPE_ARGUMENTS = '<(?:[^<>()\\n;]|<(?:[^<>()\\n;]|<[^<>()\\n;]*>)*>)*>';
 const escape = (text) => text.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&');
 const tokenize = (template) => {
     const tokens = [];
@@ -63,6 +65,9 @@ export const compileTemplate = (template) => {
         }
         if (previous)
             pattern += spaceBefore && isWordish(previous) && isWordish(token) ? '\\s+' : '\\s*';
+        // A call may pass TypeScript type arguments: `provide({key}` also matches `provide<Theme>(KEY`.
+        if (token.type === 'punct' && token.text === '(' && previous?.type === 'word')
+            pattern += `(?:${TYPE_ARGUMENTS}\\s*)?`;
         spaceBefore = false;
         if (token.type === 'word')
             pattern += escape(token.text);
@@ -86,11 +91,13 @@ export const compileTemplate = (template) => {
     if (last?.type === 'word')
         pattern += '(?![\\w$])';
     const regex = new RegExp(pattern, 'g');
+    // The longest word the code must contain: a quick no for files without it.
+    const needle = significant.reduce((best, t) => (t.type === 'word' && t.text.length > best.length ? t.text : best), '');
     return {
         source: template,
         raw: false,
         names,
-        match: (text) => [...text.matchAll(regex)].map((m) => {
+        match: (text) => (needle && !text.includes(needle) ? [] : [...text.matchAll(regex)]).map((m) => {
             const values = {};
             names.forEach((name, i) => {
                 const quoted = m.groups?.[`s${i}`];

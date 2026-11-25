@@ -1,4 +1,20 @@
-import { splitCommandArgs } from './args.js';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { repoRootOf } from './repo.js';
+import { splitCommandArgs, UsageError } from './args.js';
+
+describe('repoRootOf', () => {
+  it('says how to fix a folder outside a git repository instead of throwing a git stack trace', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'sinopia-not-a-repo-'));
+    try {
+      expect(() => repoRootOf(dir)).toThrow(UsageError);
+      expect(() => repoRootOf(dir)).toThrow(/is not in a git repository.*git init/);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
 
 describe('splitCommandArgs', () => {
   it('never takes an option value for the repo', () => {

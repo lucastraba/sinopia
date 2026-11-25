@@ -10,7 +10,7 @@ import { pickAdapter } from './loadAdapter.js';
 import { adapterInit, LOCAL_ADAPTER, mapInit } from './adapterInit.js';
 import { LOCAL_MAP } from './rules/index.js';
 import { runCli } from './cli.js';
-import { repoRoot } from './repo.js';
+import { repoRootOf } from './repo.js';
 import { serve } from './serve.js';
 
 const USAGE = `sinopia <command> [repo] [options]
@@ -70,7 +70,7 @@ const main = async () => {
         allowPositionals: true,
         options: { adapter: { type: 'string' }, force: { type: 'boolean', default: false } },
       });
-      const repo = repoRoot(resolve(positionals[0] ?? '.'));
+      const repo = repoRootOf(resolve(positionals[0] ?? '.'));
       if (command === 'map') {
         mapInit({ repo, force: values.force });
         return;
@@ -91,7 +91,7 @@ const main = async () => {
   const parsed = splitCommandArgs(rest);
   const repoPath = resolve(parsed.repo ?? '.');
   if (!existsSync(repoPath)) throw new UsageError(`No folder at ${repoPath}`);
-  const repo = repoRoot(repoPath);
+  const repo = repoRootOf(repoPath);
   const name = parsed.name ?? basename(repo);
   const out = resolve(parsed.out ?? join(home, 'maps', name));
   const { adapter, source } = await pickAdapter(parsed.adapter, repo, name);

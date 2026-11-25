@@ -64,7 +64,8 @@ Also look at `isolated.examples` from the baseline. Each isolated file either st
 
 One rule per mechanism, in `.sinopia/map.mjs`:
 
-- Pick the primitive that matches: `trpc`, `http`, `spawn`, `pythonImports`, `vitest`, `vueRoutes`, `externalServices`, `external`, and `link` for anything matched by a name (events, message types, queue topics, commands).
+- Pick the primitive that matches: `trpc`, `http`, `graphql`, `spawn`, `pythonImports`, `vitest`, `vueRoutes`, `vueComponents`, `globImports`, `dataFiles`, `runs`, `externalServices`, `external`, and `link` for anything matched by a name (events, message types, queue topics, commands). Auto-registered Vue components need `vueComponents`, and codegen'd GraphQL hooks need `graphql`, not `link`: the hook's name isn't the operation's.
+- Don't map aliases by hand: every primitive resolves `@/…`, tsconfig paths, Vite aliases and workspace packages the way the project does. A scope can be a glob (`'**/*Locales.ts'`) when the files share a shape rather than a folder.
 - Write call shapes as templates copied from the code: `'ee.emit({key}'`, `"app.{method}({path}"`. Use a regular expression only when no template can say it, and expect `check` to count it against you.
 - Scope every rule to the folders where the mechanism lives (`in`, `from`, `to`, `server`, `clients`). A rule over the whole repo matches strings in places nobody meant.
 - Give every rule a `why`: one sentence a reader of the map would want, in the project's words.

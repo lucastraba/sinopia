@@ -100,7 +100,12 @@ const operationNode = (index: MapIndex, name: string, mode: Mode): MapNode => {
   return {
     id: `operation:${name}`,
     label: operationLabel(index, name, mode),
-    sublabel: `${operation?.type === 'mutation' ? 'Saves' : 'Asks for'} · ${operation?.subgraphs.join(', ') ?? ''}`,
+    sublabel: [
+      operation?.type === 'mutation' ? 'Saves' : 'Asks for',
+      operation?.subgraphs.join(', ') ?? '',
+    ]
+      .filter(Boolean)
+      .join(' · '),
     tone: operation?.type === 'mutation' ? 'mutation' : 'query',
     group: null,
     select: { kind: 'operation', id: name },

@@ -1,14 +1,21 @@
 import { join } from 'node:path';
 import type { ScanInput } from '../adapter.js';
-import { folderPartOf, readText, sha1, type FolderPart } from '../adapters/files.js';
-import { fileKindOf } from '../adapters/folders.js';
+import { folderPartOf, listFiles, readText, sha1, type FolderPart } from '../adapters/files.js';
+import { fileKindOf, largeFile } from '../adapters/folders.js';
 import { addLink } from '../links.js';
-import type { FileLink, FileNode, Gap, Graph, RuleReport } from '../model.js';
+import type { ComponentUse, FileLink, FileNode, Gap, Graph, RuleReport } from '../model.js';
+import { globScope, isGlob } from './glob.js';
 import { stripComments } from './parse.js';
+import { makeResolver, type Resolver } from './resolve.js';
 import { compileTemplate, type CompiledTemplate } from './template.js';
 
-/** Folders or files a rule looks at: a repo-relative path or a list of them. Empty means the whole repo. */
+// Folders or files a rule looks at: a repo-relative path, a glob pattern
+// (`'**/*Locales.ts'`, `'apps/*/src'`: a folder it matches counts whole), or a
+// list of them. Empty means the whole repo.
 export type Scope = string | string[];
+
+/** Rules read files up to this size; the scan maps bigger ones without their text. */
+const RULE_READ_BYTES = 5_000_000;
 
 export type { RuleReport };
 
@@ -27,7 +34,7 @@ export interface RuleContext {
   input: ScanInput;
   ids: Set<string>;
   byId: Map<string, FileNode>;
-  /** A file's text from the scan root, or '' when it can't be read. */
+  /** A file's text from the scan root, or '' when it can't be read (or is over 5 MB). */
   read(id: string): string;
   /** The same text with comments blanked out (JS/TS, Vue, Python), offsets kept. */
   code(id: string): string;
@@ -35,6 +42,16 @@ export interface RuleContext {
   files(scope?: Scope): FileNode[];
   inScope(id: string, scope?: Scope): boolean;
   addLink(file: FileNode, link: FileLink): void;
+  /** Records that a file renders a component (a template tag, a name), once per target; counted as a `component` link. */
+  addComponent(file: FileNode, use: ComponentUse): void;
+  /**
+   * The file an import specifier written in `from` points at, or null: relative
+   * paths, tsconfig `paths` (with `extends`), Vite aliases and workspace
+   * packages, the way the project's own tools resolve them.
+   */
+  resolve(from: string, spec: string): string | null;
+  /** The repo-relative path a specifier names, without looking for a file: for patterns. Null for a package. */
+  pathOf(from: string, spec: string): string | null;
   /** Adds an import between two mapped files, once. */
   addImport(file: FileNode, target: string): void;
   addGap(gap: Gap): void;
@@ -52,20 +69,33 @@ export const scopeList = (scope: Scope | undefined): string[] =>
 
 export const inScope = (id: string, scope: Scope | undefined): boolean => {
   const paths = scopeList(scope);
-  return paths.length === 0 || paths.some((path) => path === '' || path === '.' || id === path || id.startsWith(`${path}/`));
+  return (
+    paths.length === 0 ||
+    paths.some((path) => (isGlob(path) ? globScope(path).test(id) : path === '' || path === '.' || id === path || id.startsWith(`${path}/`)))
+  );
 };
 
 /** Test files: mapped as tests, plus pytest's conftest.py. Rules never look at them. */
 export const isTestFile = (file: FileNode): boolean => file.kind === 'test' || /(^|\/)conftest\.py$/.test(file.id);
 
-/** A context for one rule, counting what it adds into `report`. */
-export const ruleContext = (graph: Graph, input: ScanInput, report: RuleReport, cache: Map<string, string>): RuleContext => {
+/** A context for one rule, counting what it adds into `report`. `cache` and `resolver` are shared by the rules of one scan. */
+export const ruleContext = (
+  graph: Graph,
+  input: ScanInput,
+  report: RuleReport,
+  cache: Map<string, string>,
+  resolver: Resolver = makeResolver(input.root, () => listFiles(input.root))
+): RuleContext => {
   const byId = new Map(graph.files.map((file) => [file.id, file]));
   const ids = new Set(byId.keys());
   const read = (id: string) => {
     let text = cache.get(id);
     if (text === undefined) {
-      text = readText(join(input.root, id), 500_000) ?? '';
+      try {
+        text = readText(join(input.root, id), RULE_READ_BYTES) ?? '';
+      } catch {
+        text = '';
+      }
       cache.set(id, text);
     }
     return text;
@@ -95,6 +125,13 @@ export const ruleContext = (graph: Graph, input: ScanInput, report: RuleReport, 
       addLink(file, link);
       if ((file.links?.length ?? 0) > before) count(link.kind);
     },
+    addComponent: (file, use) => {
+      if (file.components.some((existing) => existing.target === use.target && existing.tag === use.tag && existing.byName === use.byName)) return;
+      file.components.push(use);
+      count('component');
+    },
+    resolve: (from, spec) => resolver.resolve(from, spec, (id) => ids.has(id)),
+    pathOf: (from, spec) => resolver.toPath(from, spec),
     addImport: (file, target) => {
       if (target === file.id || file.imports.includes(target)) return;
       file.imports.push(target);
@@ -114,13 +151,17 @@ export const ruleContext = (graph: Graph, input: ScanInput, report: RuleReport, 
       const existing = byId.get(id);
       if (existing) return existing;
       let text: string | null;
+      let large: ReturnType<typeof largeFile> = null;
       try {
-        text = readText(join(input.root, id), 500_000);
+        text = readText(join(input.root, id), RULE_READ_BYTES);
+        // Too big to read whole: on the map all the same, with a note.
+        if (text === null) large = largeFile(input.root, id);
       } catch {
         // Missing or unreadable: the rule gets null, as promised, and goes on.
         return null;
       }
-      if (text === null) return null;
+      if (text === null && !large) return null;
+      if (large) graph.gaps.push(large.gap);
       const folders = new Map<string, FolderPart>(
         graph.parts.map((part) => [
           part.dir,
@@ -138,9 +179,9 @@ export const ruleContext = (graph: Graph, input: ScanInput, report: RuleReport, 
       const file: FileNode = {
         id,
         part: part.id,
-        kind: fileKindOf(id),
-        lines: text.split('\n').length,
-        hash: sha1(text),
+        kind: large?.kind ?? fileKindOf(id),
+        lines: large?.lines ?? (text as string).split('\n').length,
+        hash: large?.hash ?? sha1(text as string),
         imports: [],
         libraries: [],
         components: [],

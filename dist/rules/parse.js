@@ -142,17 +142,6 @@ export const objectEntries = (text, open) => {
 };
 /** 1-based line number of an index. */
 export const lineOf = (text, index) => text.slice(0, index).split('\n').length;
-/** A relative import specifier from `fromId`, resolved to a mapped file id. */
-export const resolveRelative = (ids, fromId, spec) => {
-    if (!spec.startsWith('.'))
-        return null;
-    const base = posix.normalize(posix.join(posix.dirname(fromId), spec));
-    for (const candidate of [base, `${base}.ts`, `${base}.js`, `${base}.vue`, `${base}/index.ts`]) {
-        if (ids.has(candidate))
-            return candidate;
-    }
-    return null;
-};
 /**
  * The file a Python module name points at, looked up from `fromId` upwards:
  * `<dir>/<module>.py`, `<dir>/<module>/__init__.py`, and the same under `src/`.

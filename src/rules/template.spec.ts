@@ -60,6 +60,12 @@ describe('compileTemplate', () => {
     expect(t.match('emit(FOO) emit(BAR)').map((m) => m.values.key?.value)).toEqual(['FOO', 'BAR']);
   });
 
+  it('skips TypeScript type arguments between a name and its call', () => {
+    expect(keys('provide({key}', 'app.provide<Theme>(THEME, x); provide<Map<string, Todo[]>>(TODOS, y)')).toEqual(['THEME', 'TODOS']);
+    expect(keys('inject({key}', 'inject <Todo> (CURRENT)')).toEqual(['CURRENT']);
+    expect(keys('provide({key}', 'if (a.provide < limit) (b)')).toEqual([]);
+  });
+
   it('refuses an empty template and a name used twice', () => {
     expect(() => compileTemplate('  ')).toThrow(/Empty/);
     expect(() => compileTemplate('f({key}, {key})')).toThrow(/twice/);

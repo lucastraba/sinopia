@@ -5,15 +5,37 @@ import { chooseMode, folderAdapter } from '../adapters/folders.js';
 import { ruleContext } from './context.js';
 import { http } from './http.js';
 import { link } from './link.js';
+import { makeResolver } from './resolve.js';
 import { custom, dataFiles, external, externalServices, pythonImports, runs, spawn, vitest, vueRoutes } from './tools.js';
 import { trpc } from './trpc.js';
+import { globImports } from './vite.js';
+import { vueComponents } from './vue.js';
+import { graphql } from './graphql.js';
 /** Where a project keeps its map rules. `sinopia` loads them by default when they exist. */
 export const LOCAL_MAP = '.sinopia/map.mjs';
 /** The primitives a map file gets: its default export is `(primitives) => rules`. */
-export const primitives = { link, trpc, http, spawn, vitest, vueRoutes, pythonImports, dataFiles, runs, externalServices, external, custom };
+export const primitives = {
+    link,
+    trpc,
+    http,
+    graphql,
+    spawn,
+    vitest,
+    vueRoutes,
+    vueComponents,
+    globImports,
+    pythonImports,
+    dataFiles,
+    runs,
+    externalServices,
+    external,
+    custom,
+};
 /** Runs the rules over a graph in order, writing what each did to `graph.meta.rules`. */
 export const applyRules = (rules, graph, input) => {
     const cache = new Map();
+    // One resolver for every rule: configs are read once, and every primitive resolves `@/x` the same way.
+    const resolver = makeResolver(input.root, () => listFiles(input.root));
     const reports = [];
     for (const rule of rules) {
         const report = {
@@ -27,7 +49,7 @@ export const applyRules = (rules, graph, input) => {
             gaps: 0,
         };
         try {
-            rule.run(ruleContext(graph, input, report, cache));
+            rule.run(ruleContext(graph, input, report, cache, resolver));
         }
         catch (error) {
             graph.gaps.push({

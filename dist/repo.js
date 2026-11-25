@@ -1,12 +1,26 @@
 import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, readdirSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
+import { UsageError } from './args.js';
 export const git = (root, args) => execFileSync('git', args, {
     cwd: root,
     encoding: 'utf8',
     maxBuffer: 64 * 1024 * 1024,
 }).trim();
 export const repoRoot = (from = process.cwd()) => git(from, ['rev-parse', '--show-toplevel']);
+/**
+ * The repo a folder is in, for the CLI. sinopia lists files and commits
+ * through git, so a folder outside a repo is a usage error with the fix, not
+ * a stack trace.
+ */
+export const repoRootOf = (path) => {
+    try {
+        return repoRoot(path);
+    }
+    catch {
+        throw new UsageError(`${path} is not in a git repository. sinopia reads a repo's files and commits through git: run \`git init\` there and commit once, or point it at a folder inside a repo.`);
+    }
+};
 export const resolveSha = (root, ref) => git(root, ['rev-parse', '--verify', `${ref}^{commit}`]);
 export const ensureDir = (dir) => {
     mkdirSync(dir, { recursive: true });
