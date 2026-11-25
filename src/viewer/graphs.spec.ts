@@ -183,3 +183,33 @@ describe('appModel', () => {
     ]);
   });
 });
+
+describe('server calls', () => {
+  it('counts graphql, trpc and http links as server calls, once per name, and opens the file that answers them', () => {
+    const callGraph: Graph = {
+      ...graph,
+      files: [
+        ...graph.files,
+        file('features/widgets/useTodos.ts', 'features/widgets', {
+          links: [
+            { target: `${SRC}/features/widgets/todos.graphql`, kind: 'graphql', label: 'todos' },
+            { target: `${SRC}/features/widgets/router.ts`, kind: 'trpc', label: 'todo.add' },
+            { target: `${SRC}/features/widgets/router.ts`, kind: 'trpc', label: 'todo.add' },
+            { target: `${SRC}/features/widgets/server.ts`, kind: 'http', label: 'POST /todos' },
+            { target: `${SRC}/features/widgets/bus.ts`, kind: 'event', label: 'todo.added' },
+          ],
+        }),
+      ],
+    };
+    const callIndex = buildIndex(
+      callGraph,
+      { app: null, parts: {}, files: {}, operations: {}, runs: [] },
+      null
+    );
+    expect([...(callIndex.partOperations.get('features/widgets') ?? [])].sort()).toEqual(['POST /todos', 'todo.add', 'todos']);
+    expect(callIndex.serverCalls.get('todo.add')).toEqual({ name: 'todo.add', kind: 'trpc', target: `${SRC}/features/widgets/router.ts` });
+    expect(
+      appModel(callIndex, 'plain').nodes.find((node) => node.id === 'part:features/widgets')?.sublabel
+    ).toBe('2 files · 3 server calls');
+  });
+});

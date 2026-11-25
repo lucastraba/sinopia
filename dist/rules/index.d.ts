@@ -8,9 +8,12 @@ export declare const primitives: {
     link: (options: import("./link.js").LinkOptions) => Rule;
     trpc: (options: import("./trpc.js").TrpcOptions) => Rule;
     http: (options: import("./http.js").HttpOptions) => Rule;
+    graphql: (options?: import("./graphql.js").GraphqlOptions) => Rule;
     spawn: (options?: import("./tools.js").ScopeOptions) => Rule;
     vitest: (options?: import("./context.js").CommonOptions) => Rule;
     vueRoutes: (options?: import("./tools.js").ScopeOptions) => Rule;
+    vueComponents: (options?: import("./vue.js").VueComponentsOptions) => Rule;
+    globImports: (options?: import("./tools.js").ScopeOptions) => Rule;
     pythonImports: (options?: import("./tools.js").ScopeOptions) => Rule;
     dataFiles: (options: import("./tools.js").DataFilesOptions) => Rule;
     runs: (options: import("./tools.js").RunsOptions) => Rule;

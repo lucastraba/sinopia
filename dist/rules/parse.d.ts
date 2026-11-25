@@ -22,8 +22,6 @@ export interface ObjectEntry {
 export declare const objectEntries: (text: string, open: number) => ObjectEntry[];
 /** 1-based line number of an index. */
 export declare const lineOf: (text: string, index: number) => number;
-/** A relative import specifier from `fromId`, resolved to a mapped file id. */
-export declare const resolveRelative: (ids: Set<string>, fromId: string, spec: string) => string | null;
 /**
  * The file a Python module name points at, looked up from `fromId` upwards:
  * `<dir>/<module>.py`, `<dir>/<module>/__init__.py`, and the same under `src/`.

@@ -1,4 +1,4 @@
-import { linkTargets } from '../links';
+import { linkTargets, type ServerCall, serverCallsOf } from '../links';
 import type {
   Description,
   Descriptions,
@@ -25,9 +25,11 @@ export interface MapIndex {
   routesByComponent: Map<string, Route[]>;
   /** Part → part → number of file-level links. */
   partLinks: Map<string, Map<string, number>>;
-  /** Part → operations its files call. */
+  /** Part → server calls its files make: operations, and graphql, trpc and http links by label. */
   partOperations: Map<string, Set<string>>;
   operationCallers: Map<string, string[]>;
+  /** Server calls that are links rather than operations, by name: what kind, and the file that answers. */
+  serverCalls: Map<string, ServerCall>;
   gapsByFile: Map<string, Gap[]>;
   changedFiles: Map<string, Change>;
   touchedParts: Set<string>;
@@ -54,6 +56,7 @@ export const buildIndex = (
   const partLinks = new Map<string, Map<string, number>>();
   const partOperations = new Map<string, Set<string>>();
   const operationCallers = new Map<string, string[]>();
+  const serverCalls = new Map<string, ServerCall>();
   for (const file of graph.files) {
     if (file.kind === 'test') continue;
     for (const target of linksOf(file)) {
@@ -65,12 +68,14 @@ export const buildIndex = (
         partLinks.set(file.part, links);
       }
     }
-    for (const operation of file.operations) {
+    for (const call of serverCallsOf(file)) {
       partOperations.set(
         file.part,
-        (partOperations.get(file.part) ?? new Set()).add(operation)
+        (partOperations.get(file.part) ?? new Set()).add(call.name)
       );
-      push(operationCallers, operation, file.id);
+      push(operationCallers, call.name, file.id);
+      if (call.target && !serverCalls.has(call.name))
+        serverCalls.set(call.name, call);
     }
   }
 
@@ -105,6 +110,7 @@ export const buildIndex = (
     partLinks,
     partOperations,
     operationCallers,
+    serverCalls,
     gapsByFile,
     changedFiles,
     touchedParts: new Set(diff?.touchedParts.map((part) => part.part) ?? []),

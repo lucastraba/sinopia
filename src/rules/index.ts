@@ -5,8 +5,12 @@ import { chooseMode, folderAdapter } from '../adapters/folders.js';
 import { type Rule, type RuleReport, ruleContext } from './context.js';
 import { http } from './http.js';
 import { link } from './link.js';
+import { makeResolver } from './resolve.js';
 import { custom, dataFiles, external, externalServices, pythonImports, runs, spawn, vitest, vueRoutes } from './tools.js';
 import { trpc } from './trpc.js';
+import { globImports } from './vite.js';
+import { vueComponents } from './vue.js';
+import { graphql } from './graphql.js';
 
 export type { Rule, RuleContext, RuleReport, Scope } from './context.js';
 
@@ -14,7 +18,23 @@ export type { Rule, RuleContext, RuleReport, Scope } from './context.js';
 export const LOCAL_MAP = '.sinopia/map.mjs';
 
 /** The primitives a map file gets: its default export is `(primitives) => rules`. */
-export const primitives = { link, trpc, http, spawn, vitest, vueRoutes, pythonImports, dataFiles, runs, externalServices, external, custom };
+export const primitives = {
+  link,
+  trpc,
+  http,
+  graphql,
+  spawn,
+  vitest,
+  vueRoutes,
+  vueComponents,
+  globImports,
+  pythonImports,
+  dataFiles,
+  runs,
+  externalServices,
+  external,
+  custom,
+};
 export type Primitives = typeof primitives;
 
 interface MapModule {
@@ -26,6 +46,8 @@ interface MapModule {
 /** Runs the rules over a graph in order, writing what each did to `graph.meta.rules`. */
 export const applyRules = (rules: Rule[], graph: Parameters<typeof ruleContext>[0], input: Parameters<typeof ruleContext>[1]): void => {
   const cache = new Map<string, string>();
+  // One resolver for every rule: configs are read once, and every primitive resolves `@/x` the same way.
+  const resolver = makeResolver(input.root, () => listFiles(input.root));
   const reports: RuleReport[] = [];
   for (const rule of rules) {
     const report: RuleReport = {
@@ -39,7 +61,7 @@ export const applyRules = (rules: Rule[], graph: Parameters<typeof ruleContext>[
       gaps: 0,
     };
     try {
-      rule.run(ruleContext(graph, input, report, cache));
+      rule.run(ruleContext(graph, input, report, cache, resolver));
     } catch (error) {
       graph.gaps.push({
         kind: 'rule-failed',

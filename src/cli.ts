@@ -9,6 +9,7 @@ import { diffGraphs } from './diff/diff.js';
 import { formatDiff } from './diff/format.js';
 import type { Graph } from './model.js';
 import { ensureDir, exportSnapshot, git, resolveSha } from './repo.js';
+import { UsageError } from './args.js';
 import { serve } from './serve.js';
 import { summarizeGaps, validateGraph } from './validate.js';
 
@@ -65,8 +66,14 @@ const adapterScan = async (
   ref: string | null
 ): Promise<Graph> => {
   if (!ref) {
-    const head = git(repo, ['rev-parse', 'HEAD']);
-    const branch = git(repo, ['rev-parse', '--abbrev-ref', 'HEAD']);
+    let head: string;
+    let branch: string;
+    try {
+      head = git(repo, ['rev-parse', 'HEAD']);
+      branch = git(repo, ['rev-parse', '--abbrev-ref', 'HEAD']);
+    } catch {
+      throw new UsageError(`${repo} has no commits yet. sinopia labels a map with the commit it read: commit once, then run it again.`);
+    }
     return adapter.scan({
       repo,
       root: repo,

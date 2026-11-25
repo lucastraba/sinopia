@@ -33,7 +33,20 @@ The default export gets the primitives and returns the rules, in the order they 
 
 ## Where things are: scopes
 
-`in`, `from`, `to`, `routers`, `server` and `clients` take a repo-relative folder or file, or a list of them: `'apps/server/src'`, `['apps/web', 'apps/admin']`. Leave `in` out for the whole repo. Rules never look at tests.
+`in`, `from`, `to`, `routers`, `server`, `clients`, `documents` and `dirs` take a repo-relative folder or file, or a list of them: `'apps/server/src'`, `['apps/web', 'apps/admin']`. Leave `in` out for the whole repo. Rules never look at tests.
+
+A scope can also be a glob pattern, for files that share a shape rather than a folder: `'**/*Locales.ts'`, `'apps/*/src'`, `'src/**/api/*.graphql'`. `**` is any number of folders, `*` anything but a slash, `{a,b}` either. A folder the pattern matches counts with everything in it.
+
+## How rules find files: imports and aliases
+
+Wherever a rule follows an import specifier (a route's lazy screen, a component in `components.d.ts`, a glob pattern, a data file), it resolves it the way the project's own tools do, the same for every primitive:
+
+- relative paths, with the extensions and `index` files TypeScript and Vite try, and `./x.js` for `x.ts`;
+- `paths` from the nearest `tsconfig.json` (or `jsconfig.json`), through its `extends` chain and the configs it `references`, as Nx workspaces and Vite templates write them;
+- `resolve.alias` from the nearest `vite.config`, object or `[{ find, replacement }]` form; a leading `/` is the Vite root;
+- the workspace's own packages by the name in their `package.json`, with subpaths.
+
+Each file uses the configs nearest to it, so two apps with their own `@/` stay apart.
 
 ## What the code looks like: templates
 
@@ -43,6 +56,8 @@ A call shape is the code you'd search for, with placeholders:
 - `{*}` skips anything up to the next part of the template, on the same line: `'bus.publish({*}, {key})'`.
 
 Whitespace may appear between any two parts of the code, so `'ee.emit({key}'` also matches `ee.emit( FOO`. A space between two words in the template means at least one space. A template that starts or ends with a word matches whole words only: `'ee.emit('` never matches `free.emit(`, and `{key}` never matches half a name.
+
+TypeScript type arguments between a name and its call are skipped: `'provide({key}'` also matches `app.provide<Theme>(THEME_KEY`.
 
 Several shapes go in a list. Where two shapes match the same code, the one listed first wins, so list the longer one first.
 
@@ -84,6 +99,57 @@ Options: `routers` (required), `callers` (default: everything outside `routers`)
 
 On the client side, a file counts when it uses an HTTP client (`fetch`, axios, httpx, requests, urllib, aiohttp, ky, got). The paths it calls are interpolated strings on a base (`f"{cfg.url}/items"`, `` `${base}/items` ``), the same through a variable that holds one (`BASE = f"{url}/api"`, then `f"{BASE}/items"` calls `/api/items`; `BASE` alone counts only where it's passed on as it is, `httpx.get(BASE)`), and path literals of two or more segments passed as an argument (`send("/ingest/subtitle", …)`). A path no route declares is an `unmatched-http` warning.
 
+### `graphql`: GraphQL operations through a generated client
+
+```js
+graphql({
+  documents: 'apps/web/src',
+  client: 'apps/web/src/gql/generated.ts',
+  in: 'apps/web/src',
+  why: "The web app reaches the API only through the hooks graphql-codegen generates from each feature's .graphql files.",
+}),
+```
+
+`graphql` reads every named `query`, `mutation`, `subscription` and `fragment` in `.graphql`/`.gql` files under `documents`, and in gql`…` or graphql(`…`) templates in code there. A `.graphql` file with no operation (a schema) stays off the map. Then it matches the code across graphql-codegen's renaming: `query currentUser` becomes `useCurrentUserQuery`, `useCurrentUserLazyQuery`, `CurrentUserDocument` and `CurrentUserGQL`, in PascalCase as codegen writes it (`setAPIKey` is `SetApiKey`), with and without `dedupeOperationSuffix` and `omitOperationSuffix`; a fragment becomes `…FragmentDoc`.
+
+It adds:
+
+- a `graphql` link from each file that uses a generated name to the document that declares the operation, labelled with the operation's name;
+- a `graphql` link from a document to the one that declares each fragment it spreads;
+- a `codegen` link from each document to the client generated from it;
+- an operation per query, mutation and subscription, with its root fields, listed in the `operations` of each file that calls it, so the viewer shows it as a server call.
+
+| Option | |
+|---|---|
+| `documents` | Where the operations are declared. Default: the whole repo. |
+| `client` | The file(s) codegen writes. With it, only names the client exports count (a hand-written `useTodosQuery` elsewhere doesn't), only files that import the client, or a file that re-exports it, are callers, and the client is never read as documents. Without it, every name shaped like codegen's counts. |
+| `in` | Files that make the calls. Default: the whole repo. |
+
+The same operation name in two documents is an `ambiguous-graphql` warning, since codegen keeps one. A name the client exports that no document declares, and a fragment nobody declares, are `unmatched-graphql` warnings. Generated files (by name or header) are never read as documents.
+
+### `vueComponents`: components Vue resolves by name
+
+```js
+vueComponents({
+  in: ['apps/web/src', 'libs/ui/src'],
+  dts: 'apps/web/components.d.ts',
+  byName: 'panel: {key}',
+  why: 'unplugin-vue-components registers every component, so templates use them without imports; the dialog stack names its panels as strings.',
+}),
+```
+
+A template tag, `<TodoItem>` or `<todo-item>`, links to the `.vue` file behind the name, recorded as a rendered component, so the viewer's screens follow it. A name comes from, in this order: the file's own imports (through barrels too: `export { default as TodoItem } from './TodoItem.vue'`), `app.component('TodoItem', TodoItem)` or a lazy `defineAsyncComponent(() => import(…))`, the map's `registries`, unplugin-vue-components' `components.d.ts`, and its `dirs`. Tags are read in `.vue` templates (HTML comments left out), in `template: '…'` strings (Storybook stories) and in JSX, never in TypeScript generics.
+
+| Option | |
+|---|---|
+| `in` | Files that render components. Default: the whole repo. |
+| `dts` | The `components.d.ts` file(s); their names apply to every file in `in`. Default: every `components.d.ts` in the repo, each for the files of its own app (the folder of the nearest `package.json` or `vite.config` above it). Entries from packages (`vue-router`'s `RouterLink`) are libraries, not files, and are left out. |
+| `dirs` | Folders whose `.vue` files are registered by file name, as unplugin's `dirs`: `'src/components'`. |
+| `registries` | Objects that name a component and its file: templates with `{key}` and `{path}`: `'{key}: () => import({path}'`. |
+| `byName` | Places a component is named as a value: templates with `{key}`: `'component: {key}'`. A quoted name nothing registers is an `unmatched-component` warning; a variable is left alone. |
+
+A `components.d.ts` entry or an `app.component` registration whose file isn't there is an `unresolved-component` warning.
+
 ### Tools and languages
 
 | Primitive | What it adds |
@@ -91,8 +157,9 @@ On the client side, a file counts when it uses an HTTP client (`fetch`, axios, h
 | `spawn({ in })` | `spawn('cmd', [...])` linked to the program it starts; `uv run <script>` resolves through `pyproject.toml`'s `[project.scripts]`. |
 | `pythonImports({ in })` | Imports between the repo's own Python modules. The generic `js` adapter lists Python files without links. |
 | `vitest()` | Vitest configs linked to their `setupFiles` and `globalSetup`, a workspace file to each project's config. |
-| `vueRoutes({ in })` | vue-router records (`RouteRecordRaw`) as the map's screens. |
-| `dataFiles({ in, extensions, aliases })` | Data files the code imports (`extensions: ['yaml', 'json']`) put on the map, which otherwise maps only code, with an import from each file that loads one. `aliases` maps import aliases to folders: `{ '@content': 'content' }`. |
+| `vueRoutes({ in })` | vue-router records (`RouteRecordRaw`) as the map's screens, with the component each mounts, also through aliases (`() => import('@/views/TodoList.vue')`). |
+| `globImports({ in })` | Vite's `import.meta.glob('./icons/*.vue')`: a `glob` link from the file to every file on the map the pattern names. Patterns may be lists, relative, from the Vite root (`/src/…`), through an alias (`@/…`), or left out with `!`. A pattern that matches only files the map doesn't hold (`*.svg`) is an info note; one that matches nothing is an `unmatched-glob` warning. |
+| `dataFiles({ in, extensions, aliases })` | Data files the code imports (`extensions: ['yaml', 'json']`) put on the map, which otherwise maps only code, with an import from each file that loads one. `aliases` maps import aliases to folders: `{ '@content': 'content' }`; the project's own aliases (tsconfig, Vite) work without it. |
 | `runs({ from })` | Files that start code by naming it (`package.json` scripts, CI workflows, build configs, Makefiles) put on the map, with a `runs` link to every repo file they name by path. Comments don't count; a path a CI file only filters on does. |
 | `externalServices({ in, names })` | Services outside the repo reached with `fetch` on a URL constant or base, or `new WebSocket(url)`: a note on the calling file. `names` labels them by a piece of the URL: `{ Twitch: 'twitch.tv' }`. |
 | `external({ name, call, in })` | One service reached through an SDK call (`call: 'ElevenLabs('`): a note on each file that makes the call. |
@@ -106,7 +173,9 @@ custom({
   run(ctx) {
     // ctx.files(scope), ctx.read(id), ctx.code(id) (comments blanked out),
     // ctx.byId, ctx.ids, ctx.addLink(file, { target, kind, label }),
-    // ctx.addImport(file, target), ctx.addGap(gap), ctx.addRoute(route)
+    // ctx.addImport(file, target), ctx.addComponent(file, { tag, target, library, byName }),
+    // ctx.addGap(gap), ctx.addRoute(route), ctx.addFile(id),
+    // ctx.resolve(fromId, specifier), ctx.pathOf(fromId, specifier): imports resolved as the primitives do
   },
 }),
 ```
@@ -116,6 +185,10 @@ custom({
 ## What `check` shows
 
 After the coverage numbers, `check` lists every rule: what it looks at, what it found (links by kind, routes, notes), its `why`, and flags for drafts and regular expressions. Then the drafts by number, the count of regular-expression shapes, and the share of links from custom code. `check --json` has the same under `rules`, and the scan keeps it in `graph.json` as `meta.rules`.
+
+Server calls: `graphql`, `trpc` and `http` links count as the calling file's server calls in the viewer, next to the operations an adapter lists.
+
+Big files: a file over 200 KB (a generated API client) stays on the map with its imports, hashed in chunks, and `check` notes it as a `large-file` info. One that says it's generated (by its name, or a header like `@generated`) isn't described.
 
 ## Rules or an adapter
 

@@ -1,7 +1,7 @@
 import { posix } from 'node:path';
 import { listFiles } from '../adapters/files.js';
 import { checkOptions, describeScope, makeRule, templatesOf } from './context.js';
-import { objectEntries, pythonModuleFile, resolveRelative } from './parse.js';
+import { objectEntries, pythonModuleFile } from './parse.js';
 import { matchAll } from './template.js';
 /** Python imports between the repo's own modules, as imports. The generic js adapter lists Python files without links. */
 export const pythonImports = (options = {}) => {
@@ -97,7 +97,8 @@ export const vitest = (options = {}) => {
             if (/^vitest\.config\.[cm]?[jt]s$/.test(base)) {
                 for (const m of ctx.code(file.id).matchAll(/\b(setupFiles|globalSetup)\s*:\s*\[([^\]]*)\]/g)) {
                     for (const [, spec] of m[2].matchAll(/'([^']+)'/g)) {
-                        const target = resolveRelative(ctx.ids, file.id, spec?.startsWith('.') ? spec : `./${spec}`);
+                        const path = spec;
+                        const target = ctx.resolve(file.id, /^\.\.?\//.test(path) ? path : `./${path}`) ?? ctx.resolve(file.id, path);
                         if (target)
                             ctx.addLink(file, { target, kind: 'config', label: m[1] });
                         else
@@ -152,7 +153,7 @@ export const vueRoutes = (options = {}) => {
                 if (componentValue) {
                     const lazy = /import\(\s*'([^']+)'\s*\)/.exec(componentValue);
                     const spec = lazy ? lazy[1] : (defaults.get(componentValue) ?? null);
-                    component = spec ? resolveRelative(ctx.ids, file.id, spec) : null;
+                    component = spec ? ctx.resolve(file.id, spec) : null;
                     if (!component) {
                         ctx.addGap({ kind: 'unresolved-route-component', level: 'warning', file: file.id, detail: `${path}: ${componentValue.slice(0, 60)}` });
                     }
@@ -275,8 +276,12 @@ export const dataFiles = (options) => {
                 const spec = m[1].replace(/\?.*$/, '');
                 if (!isData.test(spec))
                     continue;
+                // The map's own aliases first, then the project's (tsconfig paths, Vite aliases).
                 const target = resolve(file.id, spec);
-                if (target && added.has(target))
+                const viaProject = target && added.has(target) ? null : ctx.resolve(file.id, spec);
+                if (viaProject && added.has(viaProject))
+                    ctx.addImport(file, viaProject);
+                else if (target && added.has(target))
                     ctx.addImport(file, target);
                 else if (target)
                     ctx.addGap({ kind: 'unresolved-data-import', level: 'warning', file: file.id, detail: `${m[1]}: no such file in ${describeScope(options.in)}` });

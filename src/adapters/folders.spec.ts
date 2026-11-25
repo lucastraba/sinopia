@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { folderPartOf, folderPartsOf } from './files.js';
@@ -151,5 +151,23 @@ describe('folderAdapter', () => {
     });
     expect(graph.files.map((file) => file.id)).toEqual(['alerts/alert.mjs', 'bin/deploy', 'start-page/server.py']);
     expect(graph.files.find((file) => file.id === 'bin/deploy')?.kind).toBe('script');
+  });
+
+  // Root reads any file, so the permission can't be taken away there.
+  it.skipIf(process.getuid?.() === 0)('goes on past a big file it may not read, with a warning, and keeps the big files it can', async () => {
+    const big = `# Todo log\n${'- buy milk\n'.repeat(25_000)}`;
+    const repo = makeRepo({ 'notes/todo.md': '# Todo\n', 'notes/archive.md': big, 'notes/history.md': big });
+    repos.push(repo);
+    chmodSync(join(repo, 'notes/archive.md'), 0o000);
+    const graph = await folderAdapter(repo, { mode: 'plain' }).scan({
+      repo,
+      root: repo,
+      artifacts: join(repo, '.map'),
+      source: { label: 'test', sha: null },
+    });
+    chmodSync(join(repo, 'notes/archive.md'), 0o644);
+    expect(graph.files.map((file) => file.id)).toEqual(['notes/history.md', 'notes/todo.md']);
+    expect(graph.files.find((file) => file.id === 'notes/history.md')?.lines).toBe(25_002);
+    expect(graph.gaps.map((gap) => `${gap.level} ${gap.kind} ${gap.file}`)).toEqual(['warning unreadable-file notes/archive.md', 'info large-file notes/history.md']);
   });
 });

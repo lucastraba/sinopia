@@ -8,6 +8,21 @@ export declare const listFiles: (root: string) => string[];
 export declare const sha1: (value: string) => string;
 /** Text content of a file, or null for binaries and files over `maxBytes`. */
 export declare const readText: (path: string, maxBytes: number) => string | null;
+export interface TextFacts {
+    bytes: number;
+    lines: number;
+    hash: string;
+    /** The first few KB, to tell a generated file by its header. */
+    head: string;
+}
+/**
+ * Size, line count and hash of a text file of any size, read in chunks
+ * rather than whole: for files too big to hold as text. The hash is the one
+ * `sha1(readText(...))` gives for UTF-8 text. Null for a binary.
+ */
+export declare const textFacts: (path: string) => TextFacts | null;
+/** A file that says it's generated, by its name or its first lines (`@generated`, `DO NOT EDIT`). */
+export declare const looksGenerated: (path: string, head: string) => boolean;
 /** The README (or CLAUDE.md, AGENTS.md) at the repo root, trimmed, as background for describe. */
 export declare const readmeOf: (repo: string, maxChars?: number) => string;
 export interface FolderPart {

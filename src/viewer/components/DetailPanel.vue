@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue';
+import { serverCallsOf } from '../../links';
 import type { SelectionKind } from '../graphs';
 import {
   fileLabel,
@@ -47,9 +48,20 @@ const fileRow = (id: string): Row => ({
 
 const operationRow = (name: string): Row => {
   const operation = props.index.operations.get(name);
+  // A server call that is a link (tRPC, HTTP) opens the file that answers it.
+  const call = operation ? undefined : props.index.serverCalls.get(name);
+  if (call?.target) {
+    return {
+      label: name,
+      hint: `${call.kind} · ${fileName(call.target)}`,
+      target: { kind: 'file', id: call.target },
+    };
+  }
   return {
     label: operationLabel(props.index, name, props.mode),
-    hint: `${operation?.type ?? ''} · ${operation?.subgraphs.join(', ') ?? ''}`,
+    hint: [operation?.type ?? '', operation?.subgraphs.join(', ') ?? '']
+      .filter(Boolean)
+      .join(' · '),
     target: { kind: 'operation', id: name },
   };
 };
@@ -170,7 +182,7 @@ const view = computed(() => {
       });
       sections.push({
         title: 'Server calls',
-        rows: file.operations.map(operationRow),
+        rows: serverCallsOf(file).map((call) => operationRow(call.name)),
       });
       sections.push({
         title: 'Uses',
@@ -210,15 +222,17 @@ const view = computed(() => {
     text = textOf(index.descriptions.operations[selection.id], mode);
     part = operation?.part ?? null;
     if (operation) {
+      if (operation.subgraphs.length > 0)
+        facts.push(
+          `Answered by ${operation.subgraphs.join(', ')}${
+            operation.allSubgraphs.length > operation.subgraphs.length
+              ? ` (fields also come from ${operation.allSubgraphs.filter((name) => !operation.subgraphs.includes(name)).join(', ')})`
+              : ''
+          }`
+        );
+      const more = operation.fields.length - operation.rootFields.length;
       facts.push(
-        `Answered by ${operation.subgraphs.join(', ') || 'no backend service'}${
-          operation.allSubgraphs.length > operation.subgraphs.length
-            ? ` (fields also come from ${operation.allSubgraphs.filter((name) => !operation.subgraphs.includes(name)).join(', ')})`
-            : ''
-        }`
-      );
-      facts.push(
-        `Asks for ${operation.rootFields.join(', ')} and ${operation.fields.length - operation.rootFields.length} more fields`
+        `Asks for ${operation.rootFields.join(', ')}${more > 0 ? ` and ${more} more fields` : ''}`
       );
       if (mode === 'dev') code = operation.document;
       sections.push({
