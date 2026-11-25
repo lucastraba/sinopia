@@ -1,6 +1,6 @@
 # Sinopia: a map you drill into
 
-Status: draft for Lucas, 2026-11-25. Nothing built yet.
+Status: decisions made 2026-11-25 (below); M0 mockups in progress. Nothing built in the viewer yet.
 
 ## Goal
 
@@ -89,6 +89,9 @@ export const claims = [
 - Screens stay as they are.
 
 ## Decisions for Lucas
+
+Answered 2026-11-25: 1 (a) with (b) as the fallback; 2 skip the area level for small repos; 3 claims on the first screen; 4 M0 first.
+
 
 1. **Where areas come from.** (a) Written in `map.mjs`, agent-drafted, you confirm. (b) Worked out automatically from the folders. (c) Claude proposes them during `describe`. *Recommended: (a), with (b) as the fallback when there are none.* Folders can't find areas on a big app, and areas are a judgment call that belongs in the readable file.
 2. **Small repos.** Skip the area level below about 12 parts, or always show it? *Recommended: skip.* An area of two parts adds a tap and nothing else.
