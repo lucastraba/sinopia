@@ -2,7 +2,7 @@ import type { FileNode, Graph, Operation, Route } from '../model';
 import { appModel, partModel, screenModel } from './graphs';
 import { buildIndex } from './mapIndex';
 
-const SRC = 'packages/apps/main/src';
+const SRC = 'packages/apps/web/src';
 
 const file = (
   rel: string,

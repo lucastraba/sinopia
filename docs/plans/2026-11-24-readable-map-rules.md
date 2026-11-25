@@ -56,7 +56,7 @@ export default ({ trpc, link, httpRoutes, spawn, configFiles, vueRoutes, externa
 
 - k-twitch with `map.mjs` in place of `adapter.mjs` gives the same `sinopia check --json` numbers as the adapter recorded on 2026-11-21: passes, isolated 5 of 130, part-to-part 45, routes 19, links import 234, trpc 140, event 14, http 5, config 4, ws 1, spawn 1, 6 info gaps.
 - `map.mjs` for k-twitch is under 80 lines, and links from `custom()` are under 10% of non-import links. If either fails, the report says which mechanism didn't fit and why. That is a finding, not a failure.
-- Helu's frontend (`runCli` with its own adapter) is untouched and still passes.
+- A project that calls `runCli` with its own adapter is untouched and still passes.
 
 ## Tasks
 

@@ -1,6 +1,6 @@
 import { normalizeCycle, readCruise } from './cruise.js';
 
-const SRC = 'packages/apps/main/src';
+const SRC = 'packages/apps/web/src';
 
 describe('readCruise', () => {
   const scan = readCruise(
@@ -11,8 +11,8 @@ describe('readCruise', () => {
           dependencies: [
             { module: '@/b', resolved: `${SRC}/b.ts`, couldNotResolve: false },
             {
-              module: '@helu/hds',
-              resolved: 'packages/libs/hds/src/main.ts',
+              module: '@acme/ui',
+              resolved: 'packages/libs/ui/src/main.ts',
               couldNotResolve: false,
             },
             {
@@ -43,7 +43,7 @@ describe('readCruise', () => {
     },
     {
       srcDir: SRC,
-      libraryOf: (dependency) => (dependency.module.startsWith('@helu/') ? dependency.module : null),
+      libraryOf: (dependency) => (dependency.module.startsWith('@acme/') ? dependency.module : null),
       isLocal: (specifier) => specifier.startsWith('@/') || specifier.startsWith('.'),
     }
   );
@@ -51,7 +51,7 @@ describe('readCruise', () => {
   it('keeps code imports inside the app and libraries apart, and drops JSON and packages', () => {
     const entry = scan.byFile.get(`${SRC}/a.ts`);
     expect(entry?.imports).toEqual([`${SRC}/b.ts`]);
-    expect(entry?.libraries).toEqual(['@helu/hds']);
+    expect(entry?.libraries).toEqual(['@acme/ui']);
     expect(entry?.unresolved).toEqual(['@/gone']);
   });
 

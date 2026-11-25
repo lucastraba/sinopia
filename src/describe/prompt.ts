@@ -11,17 +11,17 @@ import type {
 export const PROMPT_VERSION = 'v1';
 
 export interface RulesOptions {
-  /** "Helu Map" */
+  /** "Acme Map" */
   mapName: string;
-  /** What the code is: "Helu's main web app (the app customers use)". */
+  /** What the code is: "Acme's main web app (the app customers use)". */
   subject: string;
   /** Who reads the map, as a sentence. */
   readers: string;
-  /** Who the plain description is for: "Becky". */
+  /** Who the plain description is for: "Sam". */
   plainReader: string;
-  /** "Helu's own words" */
+  /** "Acme's own words" */
   ownWords: string;
-  /** "the person using Helu" */
+  /** "the person using Acme" */
   user: string;
   /** Example of a title that isn't the file name, plus any naming rule. */
   titleExample: string;

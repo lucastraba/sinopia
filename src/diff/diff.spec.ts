@@ -2,7 +2,7 @@ import type { FileNode, Graph, GraphMeta, Operation, Route } from '../model.js';
 import { diffGraphs } from './diff.js';
 import { formatDiff } from './format.js';
 
-const SRC = 'packages/apps/main/src';
+const SRC = 'packages/apps/web/src';
 
 const file = (
   rel: string,
@@ -55,7 +55,7 @@ const route = (path: string, extra: Partial<Route> = {}): Route => ({
 });
 
 const meta: GraphMeta = {
-  title: 'Helu Map',
+  title: 'Acme Map',
   srcDir: SRC,
   sourceLabel: 'the main app',
   groups: [],
@@ -63,7 +63,7 @@ const meta: GraphMeta = {
   servicesLabel: 'Backend services',
   operationsLabel: 'GraphQL operations',
   boundary: { name: 'POC', label: 'POC boundary', partKinds: ['poc'] },
-  library: { label: 'HDS', package: '@helu/hds', componentPath: '^packages/libs/hds/src/components/(Hds\\w+)/' },
+  library: { label: 'UI kit', package: '@acme/ui', componentPath: '^packages/libs/ui/src/components/(Ui\\w+)/' },
   hasLinks: true,
 };
 
@@ -140,7 +140,7 @@ describe('diffGraphs', () => {
   const diff = diffGraphs(
     base,
     head,
-    `M\t${SRC}/features/reports/components/ReportView.vue\nA\tpackages/libs/hds/src/components/HdsSelect/HdsSelect.vue`,
+    `M\t${SRC}/features/reports/components/ReportView.vue\nA\tpackages/libs/ui/src/components/UiSelect/UiSelect.vue`,
     `${SRC}/poc/visualisation/Visual.vue`,
     { 'features/reports': 'adds a print view' },
     partOf
@@ -155,12 +155,12 @@ describe('diffGraphs', () => {
     ]);
     expect(diff.outsideMain).toEqual([
       {
-        area: 'packages/libs/hds',
-        files: ['packages/libs/hds/src/components/HdsSelect/HdsSelect.vue'],
+        area: 'packages/libs/ui',
+        files: ['packages/libs/ui/src/components/UiSelect/UiSelect.vue'],
       },
     ]);
     expect(diff.hdsComponents).toEqual([
-      { name: 'HdsSelect', usedByParts: [] },
+      { name: 'UiSelect', usedByParts: [] },
     ]);
   });
 
