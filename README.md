@@ -2,9 +2,7 @@
 
 A map of a code base that you can read on a phone. The structure comes from the code (folders, imports, and whatever an adapter knows about the stack); Claude only writes the plain-language descriptions, cached by file content so a refresh only pays for what changed. A sinopia is the underdrawing beneath a fresco.
 
-It started as Helu Map, inspired by [Floorplan](https://github.com/haydenschmitty/floorplan) (MIT); the plain-language rules in `src/describe/prompt.ts` are adapted from its writing guide.
-
-Ownership: parts of the core were first written in Helu's frontend repo; Helu confirmed in writing on 2026-11-21 that Sinopia belongs to its author.
+It was inspired by [Floorplan](https://github.com/haydenschmitty/floorplan) (MIT); the plain-language rules in `src/describe/prompt.ts` are adapted from its writing guide.
 
 Each repo can say where its own links are, the ones a generic scan can't see (RPC calls, events, HTTP between its apps, spawned processes). That's `.sinopia/map.mjs`: a short list of rules a person can read in review, each saying where to look, what the call looks like and why, written by the repo's developers or their agent. Sinopia does the parsing and matching: [`docs/map.md`](docs/map.md). For what rules can't say, a repo can carry a full adapter instead: [`docs/adapters.md`](docs/adapters.md).
 
@@ -62,7 +60,7 @@ Maps go to `$SINOPIA_HOME/maps/<name>` (default `~/.local/share/sinopia/maps`). 
 - `src/rules/`: map rules. `template.ts` compiles call shapes (`'ee.emit({key}'`) to matchers; `parse.ts` holds the shared text helpers; `resolve.ts` resolves import specifiers the same way for every primitive (tsconfig paths, Vite aliases, workspace packages) and `glob.ts` reads glob patterns; `link.ts`, `trpc.ts`, `http.ts`, `graphql.ts`, `vue.ts`, `vite.ts` and `tools.ts` are the primitives; `index.ts` loads `.sinopia/map.mjs` into an adapter and records what each rule did in `meta.rules`.
 - `src/links.ts`, `src/coverage.ts`: every link out of a file (imports, components, adapter links), and the coverage numbers and rule report `check` prints.
 - `src/adapters/folders.ts`: `js` (folders as parts, imports from dependency-cruiser without a config) and `plain` (folders and files, no links, for Lua, shell and Python repos).
-- `src/cli.ts`: `runCli`, the commands every map has; a project with its own adapter (Helu's frontend) calls it from its own CLI.
+- `src/cli.ts`: `runCli`, the commands every map has; a project with its own adapter can call it from its own CLI.
 - `src/describe/`, `src/diff/`, `src/validate.ts`, `src/serve.ts`: describe, diff, the graph checks, and the HTTP server.
 - `src/viewer/`: the Vue + Vite + elkjs viewer, built into `viewer-dist/`.
 
