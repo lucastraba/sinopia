@@ -136,9 +136,17 @@ export const folderAdapter = (repo: string, { mode, name = basename(repo) }: Fol
     const files: FileNode[] = [];
     const ids = new Set(paths);
     for (const path of paths) {
-      const content = readText(join(root, path), MAX_BYTES);
-      // Too big to read whole (a generated API client): still on the map, so imports of it resolve.
-      const large = content === null ? largeFile(root, path) : null;
+      let content: string | null;
+      let large: ReturnType<typeof largeFile> = null;
+      try {
+        content = readText(join(root, path), MAX_BYTES);
+        // Too big to read whole (a generated API client): still on the map, so imports of it resolve.
+        if (content === null) large = largeFile(root, path);
+      } catch (error) {
+        // One file the scan can't read (no permission) leaves the map, with a note; the rest goes on.
+        gaps.push({ kind: 'unreadable-file', level: 'warning', file: path, detail: `can't be read, so it isn't on the map: ${String(error).slice(0, 200)}` });
+        continue;
+      }
       if (content === null && !large) continue;
       if (large) gaps.push(large.gap);
       const part = folderPartOf(path, partDirs);

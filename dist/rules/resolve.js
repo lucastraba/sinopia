@@ -136,6 +136,14 @@ export const viteAliases = (text, configDir) => {
     }
     return out;
 };
+/** The files an `exports` value names, conditions (`import`, `types`, `default`) in the order written. */
+const exportTargets = (value) => {
+    if (typeof value === 'string')
+        return [value];
+    if (Array.isArray(value))
+        return value.flatMap(exportTargets);
+    return Object.values(record(value)).flatMap(exportTargets);
+};
 /** The repo's text files, read from disk; null when one can't be read. */
 const fromDisk = (root) => (id) => {
     try {
@@ -248,7 +256,17 @@ export const makeResolver = (root, repoFiles, read = fromDisk(root)) => {
             const exportsDot = record(json.exports)['.'];
             const fromExports = typeof json.exports === 'string' ? [json.exports] : typeof exportsDot === 'string' ? [exportsDot] : Object.values(record(exportsDot));
             const entries = [json.source, json.module, json.main, json.types, ...fromExports, 'src/index', 'index'].filter((value) => typeof value === 'string');
-            packages.push({ name: json.name, dir: dirOf(id), entries });
+            const dir = dirOf(id);
+            // `"./button": "./src/Button.vue"` and `"./*": { "import": "./src/*.ts" }`: the subpaths the package declares.
+            const subpaths = Object.entries(record(json.exports))
+                .filter(([key]) => key.startsWith('./'))
+                .map(([key, value]) => ({
+                pattern: key.slice(2),
+                targets: exportTargets(value)
+                    .map((target) => join2(dir, target))
+                    .filter((target) => target !== null),
+            }));
+            packages.push({ name: json.name, dir, entries, subpaths });
         }
         packages.sort((a, b) => b.name.length - a.name.length);
         return packages;
@@ -266,7 +284,8 @@ export const makeResolver = (root, repoFiles, read = fromDisk(root)) => {
     };
     /** Paths a specifier may stand for, best first, before extensions are tried. */
     const candidates = (from, spec) => {
-        const clean1 = spec.replace(/[?#].*$/, '');
+        // `?raw` and `#hash` suffixes go; a leading `#` is an alias (`#lib/…`), not a suffix.
+        const clean1 = spec.replace(/(?!^)[?#].*$/, '');
         if (clean1.startsWith('./') || clean1.startsWith('../') || clean1 === '.' || clean1 === '..') {
             const path = join2(dirOf(from), clean1);
             return path === null ? [] : [path];
@@ -279,17 +298,20 @@ export const makeResolver = (root, repoFiles, read = fromDisk(root)) => {
         const dirs = upFrom(dirOf(from));
         // The nearest tsconfig decides; Vite's aliases from the nearest vite config add to it.
         const ts = dirs.map(tsconfigAt).find((aliases) => aliases !== null) ?? [];
-        out.push(...throughAliases(ts, clean1));
+        const fromTs = throughAliases(ts, clean1);
+        out.push(...fromTs);
         const vite = dirs.map(viteAt).find((aliases) => aliases !== null) ?? [];
         out.push(...throughAliases(vite, clean1));
+        // The root tsconfig adds the aliases the nearest one doesn't have; an alias the nearest one has is its own.
         const rootTs = tsconfigAt('') ?? [];
-        if (rootTs !== ts)
+        if (rootTs !== ts && fromTs.length === 0)
             out.push(...throughAliases(rootTs, clean1));
         for (const pkg of workspacePackages()) {
             if (clean1 === pkg.name)
                 out.push(...pkg.entries.map((entry) => join2(pkg.dir, entry)).filter((path) => path !== null));
             else if (clean1.startsWith(`${pkg.name}/`)) {
                 const rest = clean1.slice(pkg.name.length + 1);
+                out.push(...throughAliases(pkg.subpaths, rest));
                 for (const path of [join2(pkg.dir, rest), join2(pkg.dir, `src/${rest}`)])
                     if (path !== null)
                         out.push(path);

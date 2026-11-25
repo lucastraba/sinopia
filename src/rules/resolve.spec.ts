@@ -112,4 +112,50 @@ describe('makeResolver', () => {
     expect(resolver.resolve('apps/web/src/a.ts', '@todo/shared', exists)).toBe('packages/shared/src/index.ts');
     expect(resolver.resolve('apps/web/src/a.ts', '@todo/shared/dates', exists)).toBe('packages/shared/src/dates.ts');
   });
+
+  it('resolves a package subpath through the exports it declares before the folder layout', () => {
+    const { resolver, exists } = resolverFor({
+      'packages/ui/package.json':
+        '{ "name": "@todo/ui", "exports": { ".": "./src/index.ts", "./button": "./src/components/Button.vue", "./icons/*": { "import": "./src/icons/*.ts" } } }',
+      'packages/ui/src/index.ts': '',
+      'packages/ui/src/components/Button.vue': '',
+      'packages/ui/src/icons/check.ts': '',
+      'packages/ui/src/theme.ts': '',
+      'apps/web/src/a.ts': '',
+    });
+    expect(resolver.resolve('apps/web/src/a.ts', '@todo/ui/button', exists)).toBe('packages/ui/src/components/Button.vue');
+    expect(resolver.resolve('apps/web/src/a.ts', '@todo/ui/icons/check', exists)).toBe('packages/ui/src/icons/check.ts');
+    // No matching export: the folder layout, as before.
+    expect(resolver.resolve('apps/web/src/a.ts', '@todo/ui/theme', exists)).toBe('packages/ui/src/theme.ts');
+  });
+
+  it('keeps an alias that starts with #, and drops ?query and #hash suffixes', () => {
+    const { resolver, exists } = resolverFor({
+      'vite.config.ts': "export default { resolve: { alias: [{ find: '#lib', replacement: resolve(__dirname, 'lib') }] } }",
+      'lib/Button.vue': '',
+      'src/a.ts': '',
+      'src/todo.svg': '',
+    });
+    expect(resolver.resolve('src/a.ts', '#lib/Button.vue', exists)).toBe('lib/Button.vue');
+    expect(resolver.toPath('src/a.ts', '#lib/icons/*.svg')).toBe('lib/icons/*.svg');
+    expect(resolver.resolve('src/a.ts', './todo.svg?raw', exists)).toBe('src/todo.svg');
+    expect(resolver.resolve('src/a.ts', './todo.svg#icon', exists)).toBe('src/todo.svg');
+  });
+
+  it("lets the nearest tsconfig own its alias: no fall back to the root config's target for it", () => {
+    const { resolver, exists } = resolverFor({
+      'tsconfig.json': '{ "compilerOptions": { "paths": { "@/*": ["./shared/*"], "@todo/shared": ["./shared/index.ts"] } } }',
+      'shared/store.ts': '',
+      'shared/index.ts': '',
+      'apps/web/tsconfig.json': '{ "compilerOptions": { "paths": { "@/*": ["./src/*"] } } }',
+      'apps/web/src/a.ts': '',
+      'src/root.ts': '',
+    });
+    // The app's @/store isn't there: unresolved, never the root's shared/store.ts.
+    expect(resolver.resolve('apps/web/src/a.ts', '@/store', exists)).toBeNull();
+    // An alias the app's config doesn't have still comes from the root.
+    expect(resolver.resolve('apps/web/src/a.ts', '@todo/shared', exists)).toBe('shared/index.ts');
+    // Where the root config is the nearest, its @/ is the one.
+    expect(resolver.resolve('src/root.ts', '@/store', exists)).toBe('shared/store.ts');
+  });
 });

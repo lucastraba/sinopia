@@ -183,6 +183,27 @@ describe('vueComponents', () => {
     ]);
   });
 
+  it('keeps app.component registrations to the app that makes them', async () => {
+    const plugin = (name: string) => `import ${name} from './${name}.vue';\napp.component('AppButton', ${name});`;
+    const graph = await scan(
+      {
+        'apps/web/package.json': '{ "name": "web" }',
+        'apps/web/src/main.ts': plugin('WebButton'),
+        'apps/web/src/WebButton.vue': '<template><button /></template>',
+        'apps/web/src/App.vue': '<template><AppButton /></template>',
+        'apps/admin/package.json': '{ "name": "admin" }',
+        'apps/admin/src/main.ts': plugin('AdminButton'),
+        'apps/admin/src/AdminButton.vue': '<template><button /></template>',
+        'apps/admin/src/App.vue': '<template><app-button /></template>',
+      },
+      'export default ({ vueComponents }) => [vueComponents()];'
+    );
+    expect(componentsOf(graph)).toEqual([
+      'apps/admin/src/App.vue -> apps/admin/src/AdminButton.vue AppButton',
+      'apps/web/src/App.vue -> apps/web/src/WebButton.vue AppButton',
+    ]);
+  });
+
   it('reads tags from the template only, comments left out', () => {
     expect(templateTags('<script>const a = "<FakeTag>";</script>\n<template><Real /><!-- <Gone/> --><div><my-item/></div></template>').map((t) => t.name)).toEqual(['Real', 'MyItem']);
   });

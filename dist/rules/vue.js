@@ -180,8 +180,8 @@ export const vueComponents = (options = {}) => {
             }
             return out;
         };
-        // Names the files can use without importing them. Only a components.d.ts the rule found itself
-        // is limited to its app; what the map names applies to all of `in`. Nearest app first.
+        // Names the files can use without importing them. app.component and a components.d.ts the rule
+        // found itself are limited to their app; what the map names applies to all of `in`. Nearest app first.
         const globals = [];
         const register = (app, name, target) => {
             let entry = globals.find((g) => g.app === app);
@@ -202,8 +202,9 @@ export const vueComponents = (options = {}) => {
                 const ident = /^([A-Za-z_$][\w$]*)\s*[,)]/.exec(rest);
                 const lazy = new RegExp(`^(?:defineAsyncComponent\\(\\s*)?\\(\\)\\s*=>\\s*import\\(\\s*${STRING}`).exec(rest);
                 const target = ident ? (localImports(file.id).get(ident[1]) ?? null) : lazy ? ctx.resolve(file.id, lazy[2]) : null;
+                // Vue keeps a global component to the app that registers it.
                 if (target)
-                    register('', name, target);
+                    register(appOf(file.id), name, target);
                 else
                     ctx.addGap({ kind: 'unresolved-component', level: 'warning', file: file.id, detail: `${name} (line ${lineOf(text, m.index)}): registered with app.component, but its file isn't found` });
             }
