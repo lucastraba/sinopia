@@ -155,3 +155,18 @@ describe('areas without a map', () => {
     expect(formatAreas(graph)[0]).toBe('Areas: none written in the map, so 4 by folder (the viewer skips them: fewer than 12 parts)');
   });
 });
+
+describe('review fixes', () => {
+  it('groups folders named like Object properties without throwing', () => {
+    const parts = ['constructor', '__proto__', 'toString'].map((dir) => ({ id: dir, kind: 'folder', name: dir, dir, files: [] }));
+    expect(Object.keys(folderAreas(parts))).toEqual(['constructor', '__proto__', 'toString']);
+    expect(foldAreas(graphOf(parts, []), null).areas.map((area) => area.name)).toEqual(['constructor', '__proto__', 'toString']);
+  });
+
+  it('warns for a part in no area even when the map has an area called Other', () => {
+    const graph = todoGraph();
+    addAreas(graph, { ...TODO_AREAS, Other: { folders: ['scripts'] } }, []);
+    expect(graph.gaps).toEqual([expect.objectContaining({ kind: 'part-without-area', detail: expect.stringContaining('content is in no area') })]);
+  });
+});
+

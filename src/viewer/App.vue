@@ -198,7 +198,7 @@ const upLabel = computed(() =>
 
 const showPanel = computed(() =>
   page.value
-    ? panel.value !== 'detail'
+    ? panel.value !== 'detail' || !!state.selection
     : panel.value !== 'detail' || !!state.selection || !isNarrow
 );
 </script>

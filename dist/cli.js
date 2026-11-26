@@ -160,7 +160,7 @@ export const runCli = async (options) => {
         const graph = await scanAt(options, null);
         const coverage = coverageOf(graph, options.adapterSource ?? adapter.name);
         if (values.json) {
-            console.log(JSON.stringify({ ...coverage, rules: graph.meta.rules ?? null, areas: graph.areas, areaLinks: graph.areaLinks, claims: graph.claims, gapList: graph.gaps }, null, 2));
+            console.log(JSON.stringify({ ...coverage, rules: graph.meta.rules ?? null, areas: graph.areas, areaLinks: graph.areaLinks, linkTotals: graph.linkTotals, claims: graph.claims, gapList: graph.gaps }, null, 2));
         }
         else {
             console.log(`Check of ${repo} with adapter ${coverage.adapter} (interface v${adapter.interfaceVersion})`);

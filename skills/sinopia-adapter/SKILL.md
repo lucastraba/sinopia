@@ -119,7 +119,8 @@ Once the rules hold, give the map its overview (`sinopia map docs`, "Areas and c
 2. Run `check`. Every part should land somewhere: fix each `part-without-area` warning by adding its folder to an area. Look at the lines: one area that sends or takes most of the links usually holds two things; split it.
 3. Write `export const claims`, 3 to 6, each `{ says, never | only | through, why, draft: true }`. Start from the rules' `why` lines and the README: "the core never imports the UI", "only the store calls the API", "the page reaches the desktop only through the bridge". Phrase `says` as a sentence the user would say.
 4. Run `check` again and read each claim's result. Don't rewrite a claim until it passes: a broken claim is either a finding (tell the user, with the examples `check` printed) or a sentence that says more than was meant (say which, and offer the narrower one). Never add `enforce: true` yourself.
-5. In the report, list the areas (name, part and file counts, one line why) and each claim with holds/broken and its count, so the user can confirm them, move a folder, or reword a claim without opening the file.
+5. If the repo keeps a full adapter (`.sinopia/adapter.mjs`), `--adapter auto` loads it and never reads `areas` or `claims` from the map, so the overview falls back to folders and shows no claims. Either export the same `areas` and `claims` from the adapter object (fields `areas` and `claims`, as in `docs/adapters.md`), or run every `check`, `scan` and `refresh` with `--adapter .sinopia/map.mjs` until the adapter is removed. Say which one you did in the report.
+6. In the report, list the areas (name, part and file counts, one line why) and each claim with holds/broken and its count, so the user can confirm them, move a folder, or reword a claim without opening the file.
 
 ## 7. Upgrading to a new interface version
 

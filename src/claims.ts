@@ -23,12 +23,34 @@ const isObject = (value: unknown): value is Record<string, unknown> =>
 const isStrings = (value: unknown): value is string[] => Array.isArray(value) && value.every((item) => typeof item === 'string');
 const quote = (value: string) => JSON.stringify(value);
 
-/** Area names a side names, for the claim's `areas` and the area pages. */
-const sideAreas = (side: unknown): string[] => {
+/** Area names a side names, for the claim's `areas` and the area pages. With `except`, also the names it leaves out, for checking them. */
+const sideAreas = (side: unknown, withExcept = false): string[] => {
   if (typeof side === 'string') return [side];
   if (!isObject(side)) return [];
-  return [...(typeof side.area === 'string' ? [side.area] : []), ...(isStrings(side.areas) ? side.areas : [])];
+  return [
+    ...(typeof side.area === 'string' ? [side.area] : []),
+    ...(isStrings(side.areas) ? side.areas : []),
+    ...(withExcept ? sideAreas(side.except, true) : []),
+  ];
 };
+
+const SIDES = ['from', 'to', 'who', 'via'];
+
+/** Every area name a claim uses, in its sides (with their `except`) and its `areas`, with where it says it. */
+const namesInClaim = (claim: Record<string, unknown>): { key: string; name: string }[] => {
+  const form = FORMS.find((candidate) => claim[candidate] !== undefined);
+  const rule = form && isObject(claim[form]) ? (claim[form] as Record<string, unknown>) : {};
+  return [
+    ...SIDES.flatMap((key) => (rule[key] === undefined ? [] : sideAreas(rule[key], true).map((name) => ({ key, name })))),
+    ...(isStrings(claim.areas) ? claim.areas.map((name) => ({ key: 'areas', name })) : []),
+  ];
+};
+
+const unknownName = (label: string, { key, name }: { key: string; name: string }) =>
+  key === 'areas' ? `${label}: areas names ${quote(name)}, which the map doesn't have` : `${label}: ${key} names the area ${quote(name)}, which the map doesn't have`;
+
+const claimLabel = (claim: Record<string, unknown>, i: number) =>
+  typeof claim.says === 'string' ? `claim ${i + 1} (${quote(claim.says)})` : `claim ${i + 1}`;
 
 const checkAreas = (areas: unknown, problems: string[]): Set<string> => {
   const names = new Set<string>();
@@ -59,7 +81,7 @@ const checkClaim = (claim: unknown, i: number, knownArea: (name: string) => bool
     problems.push(`${at} must be { says, never | only | through }`);
     return;
   }
-  const label = typeof claim.says === 'string' ? `${at} (${quote(claim.says)})` : at;
+  const label = claimLabel(claim, i);
   if (typeof claim.says !== 'string' || !claim.says) problems.push(`${at}: says must be the sentence the claim makes`);
   const unknown = Object.keys(claim).filter((key) => !CLAIM_KEYS.includes(key));
   if (unknown.length) problems.push(`${label}: unknown option ${unknown.join(', ')}; a claim takes ${CLAIM_KEYS.join(', ')}`);
@@ -92,25 +114,23 @@ const checkClaim = (claim: unknown, i: number, knownArea: (name: string) => bool
     }
     const bad = Object.keys(side).filter((name) => !SIDE_KEYS.includes(name));
     if (bad.length) problems.push(`${label}: ${key} takes ${SIDE_KEYS.join(', ')}, not ${bad.join(', ')}`);
+    if (side.area !== undefined && typeof side.area !== 'string') problems.push(`${label}: ${key}.area must be an area name`);
+    if (side.areas !== undefined && !isStrings(side.areas)) problems.push(`${label}: ${key}.areas must be a list of area names`);
     if (side.folders !== undefined && !isStrings(side.folders)) problems.push(`${label}: ${key}.folders must be a list of folders`);
     if (side.files !== undefined && typeof side.files !== 'string' && !isStrings(side.files)) problems.push(`${label}: ${key}.files must be a glob or a list of them`);
     if (side.except !== undefined) checkSide(`${key}.except`, side.except);
   };
-  for (const key of ['from', 'to', 'who', 'via']) {
-    if (rule[key] === undefined) continue;
-    checkSide(key, rule[key]);
-    for (const name of sideAreas(rule[key])) {
-      if (!knownArea(name)) problems.push(`${label}: ${key} names the area ${quote(name)}, which the map doesn't have`);
-    }
-  }
+  for (const key of SIDES) if (rule[key] !== undefined) checkSide(key, rule[key]);
   if (claim.areas !== undefined && !isStrings(claim.areas)) problems.push(`${label}: areas must be a list of area names`);
-  else for (const name of (claim.areas as string[] | undefined) ?? []) if (!knownArea(name)) problems.push(`${label}: areas names ${quote(name)}, which the map doesn't have`);
+  for (const named of namesInClaim(claim)) if (!knownArea(named.name)) problems.push(unknownName(label, named));
   for (const key of ['draft', 'enforce']) if (claim[key] !== undefined && typeof claim[key] !== 'boolean') problems.push(`${label}: ${key} must be true or false`);
 };
 
 /**
  * Checks a map's `areas` and `claims` exports and returns what's wrong, one
- * line each, so a typo fails the scan with what the file should say.
+ * line each, so a typo fails the scan with what the file should say. Without
+ * `areas`, area names wait for the scan: `unknownAreas` checks them against
+ * the folder areas it made.
  */
 export const checkSpecs = (areas: unknown, claims: unknown): string[] => {
   const problems: string[] = [];
@@ -121,6 +141,21 @@ export const checkSpecs = (areas: unknown, claims: unknown): string[] => {
   const knownArea = (name: string) => areas === undefined || names.has(name) || name === 'Other';
   claims.forEach((claim, i) => checkClaim(claim, i, knownArea, problems));
   return problems;
+};
+
+/**
+ * The area names claims use that the scan has no area for, one line each.
+ * For a map without `areas`, whose areas come from the folders: a misspelled
+ * name would match no file, and a claim about it would hold for nothing.
+ */
+export const unknownAreas = (claims: ClaimSpec[], areaNames: string[]): string[] => {
+  const known = new Set([...areaNames, 'Other']);
+  return claims.flatMap((claim, i) => {
+    const record = claim as unknown as Record<string, unknown>;
+    return namesInClaim(record)
+      .filter((named) => !known.has(named.name))
+      .map((named) => unknownName(claimLabel(record, i), named));
+  });
 };
 
 /** A test for the files one side of a claim picks. */
@@ -205,10 +240,12 @@ export const evaluateClaim = (claim: ClaimSpec, ctx: AreaContext): ClaimResult =
       if (kindOk(edge)) offending.push({ ...edge, fromGroup: name(a), toGroup: name(b) });
     }
   } else if (form === 'never') {
+    // A link with both ends where `from` and `to` overlap (one nested in the other) stays inside both, so it doesn't cross.
     const from = side('from');
     const to = side('to');
+    const inBoth = (file: string) => from(file) && to(file);
     for (const edge of ctx.edges) {
-      if (!from(edge.from) || !to(edge.to) || from(edge.to)) continue;
+      if (!from(edge.from) || !to(edge.to) || (inBoth(edge.from) && inBoth(edge.to))) continue;
       scope.push(edge);
       if (kindOk(edge)) offending.push(edge);
     }
@@ -227,16 +264,18 @@ export const evaluateClaim = (claim: ClaimSpec, ctx: AreaContext): ClaimResult =
     const to = side('to');
     const via = side('via');
     for (const edge of ctx.edges) {
-      if (!from(edge.from) || from(edge.to) || !kindOk(edge)) continue;
+      if (!from(edge.from) || !kindOk(edge)) continue;
       if (!to(edge.to) && !via(edge.to)) continue;
+      // Links inside `from` don't count, unless they enter a `to` nested in it from outside `to` and `via`.
+      if (from(edge.to) && !(to(edge.to) && !to(edge.from) && !via(edge.from))) continue;
       scope.push(edge);
       if (!via(edge.to)) offending.push(edge);
     }
   }
 
-  const byKind: Record<string, number> = {};
+  const byKind: Record<string, number> = Object.create(null);
   for (const edge of offending) byKind[edge.kind] = (byKind[edge.kind] ?? 0) + 1;
-  const scopeByVerb: Record<string, number> = {};
+  const scopeByVerb: Record<string, number> = Object.create(null);
   for (const edge of scope) {
     const verb = verbOf(edge.kind);
     scopeByVerb[verb] = (scopeByVerb[verb] ?? 0) + 1;

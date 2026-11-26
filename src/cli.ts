@@ -209,7 +209,7 @@ export const runCli = async (options: CliOptions): Promise<void> => {
     if (values.json) {
       console.log(
         JSON.stringify(
-          { ...coverage, rules: graph.meta.rules ?? null, areas: graph.areas, areaLinks: graph.areaLinks, claims: graph.claims, gapList: graph.gaps },
+          { ...coverage, rules: graph.meta.rules ?? null, areas: graph.areas, areaLinks: graph.areaLinks, linkTotals: graph.linkTotals, claims: graph.claims, gapList: graph.gaps },
           null,
           2
         )

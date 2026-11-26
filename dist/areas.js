@@ -94,7 +94,8 @@ export const folderAreas = (parts) => {
         return { name: folder, folder };
     };
     const group = (depth) => {
-        const specs = {};
+        // No prototype: a folder named `constructor` or `__proto__` is an area like any other.
+        const specs = Object.create(null);
         for (const part of parts) {
             const { name, folder } = groupOf(part, depth);
             const spec = (specs[name] ??= { folders: [] });
@@ -158,9 +159,11 @@ export const foldAreas = (graph, specs) => {
     const gaps = [];
     const areaOfPart = new Map();
     for (const part of graph.parts) {
-        const name = assigned.get(part.id) ?? 'Other';
+        const area = assigned.get(part.id) ?? null;
+        const name = area ?? 'Other';
         areaOfPart.set(part.id, name);
-        if (name === 'Other' && !(name in used)) {
+        // Warn for every part no written area claims, also when the map has an area called Other.
+        if (area === null && written) {
             gaps.push({
                 kind: 'part-without-area',
                 level: 'warning',
@@ -170,7 +173,7 @@ export const foldAreas = (graph, specs) => {
         }
     }
     const names = Object.keys(used);
-    if ([...areaOfPart.values()].some((name) => !(name in used)))
+    if ([...areaOfPart.values()].some((name) => !Object.hasOwn(used, name)))
         names.push('Other');
     const fileById = new Map(graph.files.map((file) => [file.id, file]));
     const partOf = (file) => fileById.get(file)?.part;

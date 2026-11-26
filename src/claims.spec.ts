@@ -223,6 +223,9 @@ export const claims = [
       expect(text).toContain('1. ✗ The UI kit never imports the app [enforced]');
       expect(text).toContain('ERROR claim-broken');
       expect(text).toContain('WARNING part-without-area: (root) is in no area');
+      logs.length = 0;
+      await runCli({ adapter, adapterSource: source, repo, out, argv: ['check', '--json'], command: 'sinopia', diffBase: null });
+      expect(JSON.parse(logs.join('\n')).linkTotals).toEqual(graph.linkTotals);
     } finally {
       log.mockRestore();
       process.exitCode = 0;
@@ -234,3 +237,36 @@ export const claims = [
     await expect(pickAdapter('auto', repo, 'todo-app')).rejects.toThrow('claim 1 ("x"): to names the area "Sever", which the map doesn\'t have');
   });
 });
+
+describe('review fixes', () => {
+  it('counts links into a `to` nested inside `from`, for never and through', () => {
+    const server = { folders: ['apps/server'] };
+    const db = { folders: ['apps/server/src/db'] };
+    expect(claim({ never: { from: server, to: db } })).toMatchObject({ holds: false, count: 1, examples: [{ from: TODO.router, to: TODO.db }] });
+    expect(claim({ through: { from: server, to: db, via: { files: ['apps/server/src/db/index.ts'] } } })).toMatchObject({ holds: false, count: 1 });
+  });
+
+  it('refuses area selectors of the wrong type and unknown names in except', () => {
+    expect(
+      checkSpecs(TODO_AREAS, [
+        { says: 'a', never: { from: 'Web', to: { areas: 17 } } },
+        { says: 'b', never: { from: { area: 5 }, to: 'Web' } },
+        { says: 'c', never: { from: { area: 'Web', except: 'Sever' }, to: 'Server' } },
+      ])
+    ).toEqual([
+      'claim 1 ("a"): to.areas must be a list of area names',
+      'claim 2 ("b"): from.area must be an area name',
+      'claim 3 ("c"): from names the area "Sever", which the map doesn\'t have',
+    ]);
+  });
+
+  it('without written areas, makes a claim naming an area the folders did not make an error', () => {
+    const bad = todoGraph();
+    addAreas(bad, null, [{ says: 'scripts never reach the apps', never: { from: 'scripts', to: 'appss' }, enforce: true } as ClaimSpec]);
+    expect(bad.gaps).toEqual([expect.objectContaining({ kind: 'claim-unknown-area', level: 'error', detail: expect.stringContaining('"appss"') })]);
+    const good = todoGraph();
+    addAreas(good, null, [{ says: 'content never reaches the apps', never: { from: 'content', to: 'apps' } } as ClaimSpec]);
+    expect(good.gaps.filter((gap) => gap.kind === 'claim-unknown-area')).toEqual([]);
+  });
+});
+

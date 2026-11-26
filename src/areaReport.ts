@@ -1,7 +1,7 @@
 // Puts areas, the lines between them and the claims on a scanned graph, and
 // says what they found for `check`.
 import { foldAreas, OVERVIEW_MIN_PARTS } from './areas.js';
-import { evaluateClaims } from './claims.js';
+import { evaluateClaims, unknownAreas } from './claims.js';
 import type { AreaSpec, ClaimResult, ClaimSpec, Graph } from './model.js';
 
 /**
@@ -17,6 +17,12 @@ export const addAreas = (graph: Graph, specs: Record<string, AreaSpec> | null, c
   const { results, gaps } = evaluateClaims(claims, folded.context);
   graph.claims = results;
   graph.gaps.push(...folded.gaps, ...gaps);
+  // A map without `areas` can only name its folder areas: a misspelled one would match no file and the claim would hold for nothing.
+  if (specs === null || Object.keys(specs).length === 0) {
+    for (const detail of unknownAreas(claims, folded.areas.map((area) => area.name))) {
+      graph.gaps.push({ kind: 'claim-unknown-area', level: 'error', file: null, detail });
+    }
+  }
 };
 
 const plural = (n: number, noun: string) => `${n.toLocaleString('en-US')} ${noun}${n === 1 ? '' : 's'}`;
