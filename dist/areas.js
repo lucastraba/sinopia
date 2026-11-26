@@ -114,6 +114,7 @@ export const slug = (name) => name
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-|-$/g, '') || 'area';
+// Counts keyed by area or part names: callers pass prototype-free objects, so a folder named `constructor` counts from 0.
 const inc = (counts, key, by = 1) => {
     counts[key] = (counts[key] ?? 0) + by;
 };
@@ -184,8 +185,8 @@ export const foldAreas = (graph, specs) => {
     const edges = fileEdges(graph);
     const partPairs = new Set();
     const lines = new Map();
-    const internal = {};
-    const serverCalls = {};
+    const internal = Object.create(null);
+    const serverCalls = Object.create(null);
     const serverOps = new Map();
     for (const edge of edges) {
         const fromPart = partOf(edge.from);
@@ -245,9 +246,9 @@ export const foldAreas = (graph, specs) => {
     });
     const areaLinks = [...lines.values()]
         .map(({ from, to, verb, edges: list }) => {
-        const kinds = {};
-        const fromParts = {};
-        const toParts = {};
+        const kinds = Object.create(null);
+        const fromParts = Object.create(null);
+        const toParts = Object.create(null);
         for (const edge of list) {
             inc(kinds, edge.kind);
             inc(fromParts, partOf(edge.from) ?? '');

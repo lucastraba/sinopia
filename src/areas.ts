@@ -130,6 +130,7 @@ export const slug = (name: string): string =>
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-|-$/g, '') || 'area';
 
+// Counts keyed by area or part names: callers pass prototype-free objects, so a folder named `constructor` counts from 0.
 const inc = (counts: Record<string, number>, key: string, by = 1) => {
   counts[key] = (counts[key] ?? 0) + by;
 };
@@ -221,8 +222,8 @@ export const foldAreas = (graph: Pick<Graph, 'parts' | 'files'>, specs: Record<s
 
   const partPairs = new Set<string>();
   const lines = new Map<string, { from: string; to: string; verb: Verb; edges: Edge[] }>();
-  const internal: Record<string, number> = {};
-  const serverCalls: Record<string, number> = {};
+  const internal: Record<string, number> = Object.create(null);
+  const serverCalls: Record<string, number> = Object.create(null);
   const serverOps = new Map<string, Set<string>>();
   for (const edge of edges) {
     const fromPart = partOf(edge.from);
@@ -282,9 +283,9 @@ export const foldAreas = (graph: Pick<Graph, 'parts' | 'files'>, specs: Record<s
 
   const areaLinks: AreaLink[] = [...lines.values()]
     .map(({ from, to, verb, edges: list }) => {
-      const kinds: Record<string, number> = {};
-      const fromParts: Record<string, number> = {};
-      const toParts: Record<string, number> = {};
+      const kinds: Record<string, number> = Object.create(null);
+      const fromParts: Record<string, number> = Object.create(null);
+      const toParts: Record<string, number> = Object.create(null);
       for (const edge of list) {
         inc(kinds, edge.kind);
         inc(fromParts, partOf(edge.from) ?? '');

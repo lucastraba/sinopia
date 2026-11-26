@@ -161,6 +161,10 @@ describe('review fixes', () => {
     const parts = ['constructor', '__proto__', 'toString'].map((dir) => ({ id: dir, kind: 'folder', name: dir, dir, files: [] }));
     expect(Object.keys(folderAreas(parts))).toEqual(['constructor', '__proto__', 'toString']);
     expect(foldAreas(graphOf(parts, []), null).areas.map((area) => area.name)).toEqual(['constructor', '__proto__', 'toString']);
+    const files = [file('constructor/a.ts', { imports: ['constructor/b.ts'] }), file('constructor/b.ts'), file('toString/x.ts', { imports: ['constructor/a.ts'] })];
+    const folded = foldAreas(graphOf(parts, files), null);
+    expect(folded.areas.find((area) => area.name === 'constructor')?.internalLinks).toBe(1);
+    expect(folded.areaLinks).toMatchObject([{ from: 'toString', to: 'constructor', count: 1, fromParts: { toString: 1 }, toParts: { constructor: 1 } }]);
   });
 
   it('warns for a part in no area even when the map has an area called Other', () => {
