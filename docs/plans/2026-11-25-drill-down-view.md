@@ -1,6 +1,6 @@
 # Sinopia: a map you drill into
 
-Status: decisions made 2026-11-25 (below); M0 mockups in progress. Nothing built in the viewer yet.
+Status: decisions made 2026-11-25 (below); M0 mockups approved 2026-11-26. Pieces 1-3 (areas and lines in graph.json, claims in check, the overview and area level in the viewer) built on the `drill-down-overview` branch, matching the mockups' counts.
 
 ## Goal
 
