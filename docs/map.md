@@ -223,7 +223,7 @@ Without `areas`, the overview groups parts by top folder (a workspace package st
 
 - `never: { from, to, kind? }`: nothing in `from` links into `to`. `never: { each: 'apps/web/src/features/*', kind? }` says no two matches of the pattern link to each other.
 - `only: { who, to, from?, kind? }`: links into `to` come only from `who`. With `from`, only links starting there count.
-- `through: { from, to, via, kind? }`: every link from `from` to `to` lands on `via`.
+- `through: { from, to, via, kind? }`: every link from `from` to `to` lands on `via`. A link that starts on `via` is the way through, so it never breaks the claim, also when `via` sits inside `from`: with `from` the server, `via` its routers and `to` its database, routers → database holds and any other server file → database breaks it.
 
 A side is an area's name, or `{ area | areas, folders, files, except }`: `files` takes globs (`'**/*.store.ts'`), and `except` takes the same shape to leave files out. `kind` (or `kinds`) narrows a claim to some link kinds; `kind: 'import'` includes components and data files, which are imports too. `why` says why the promise matters, `areas` lists more areas whose pages show the claim, and `draft: true` marks one an agent wrote. A broken claim is a finding, not an error, unless it says `enforce: true`: then `check` fails on it (`claim-broken`), the way a lint rule would. Claims are meant to be read, so a broken draft usually means the sentence needs changing, not the code. `check` refuses a claim that names an area the map doesn't have, or an option it doesn't know.
 

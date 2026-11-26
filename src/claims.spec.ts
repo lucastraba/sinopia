@@ -244,6 +244,11 @@ describe('review fixes', () => {
     const db = { folders: ['apps/server/src/db'] };
     expect(claim({ never: { from: server, to: db } })).toMatchObject({ holds: false, count: 1, examples: [{ from: TODO.router, to: TODO.db }] });
     expect(claim({ through: { from: server, to: db, via: { files: ['apps/server/src/db/index.ts'] } } })).toMatchObject({ holds: false, count: 1 });
+    // Links that start on `via` are the way through, also when `via` sits inside `from`.
+    const routers = { folders: ['apps/server/src/routers'] };
+    expect(claim({ through: { from: server, to: db, via: routers } })).toMatchObject({ holds: true, scope: 0 });
+    const bypass = todoGraph([...todoFiles(), file('apps/server/src/jobs/nightly.ts', { imports: [TODO.db] })]);
+    expect(claim({ through: { from: server, to: db, via: routers } }, bypass)).toMatchObject({ holds: false, count: 1, examples: [{ from: 'apps/server/src/jobs/nightly.ts', to: TODO.db }] });
   });
 
   it('refuses area selectors of the wrong type and unknown names in except', () => {
