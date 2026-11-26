@@ -164,6 +164,148 @@ export interface Graph {
     /** Import cycles, as file id lists. */
     cycles: string[][];
     gaps: Gap[];
+    /** The app's areas, each part in one (src/areas.ts). Absent in graphs written before areas. */
+    areas?: Area[];
+    /** File links between two areas, folded into one line per (from, to, verb), biggest first. */
+    areaLinks?: AreaLink[];
+    /** What the folding started from: every file link, and the distinct part-to-part pairs among them. */
+    linkTotals?: {
+        links: number;
+        partPairs: number;
+    };
+    /** The map's claims, as the scan found them (src/claims.ts). */
+    claims?: ClaimResult[];
+}
+/** An area as a map file writes it: `export const areas = { 'Game rules': { folders: ['src/game'], why } }`. */
+export interface AreaSpec {
+    /** Folders whose parts belong here, by prefix of the part's folder; the longest match wins. `(root)` is the top-level files. */
+    folders: string[];
+    why?: string;
+    /** Written by an agent and not yet confirmed. */
+    draft?: boolean;
+}
+/**
+ * One side of a claim: an area by name, or files picked by area, folder or
+ * glob, minus `except`. A string is an area name.
+ */
+export type ClaimSide = string | {
+    area?: string;
+    areas?: string[];
+    folders?: string[];
+    files?: string | string[];
+    except?: ClaimSide;
+};
+/** Link kinds a claim looks at: `import` means any static import (code, a component, a data file). */
+export interface ClaimKinds {
+    kind?: string;
+    kinds?: string[];
+}
+/** A statement about the app's shape that the scan proves or flags. One of `never`, `only` or `through`. */
+export interface ClaimSpec {
+    says: string;
+    /** No link goes from `from` into `to`; or, with `each`, between two different matches of a folder pattern. */
+    never?: ({
+        from: ClaimSide;
+        to: ClaimSide;
+        each?: undefined;
+    } | {
+        each: string;
+        from?: undefined;
+        to?: undefined;
+    }) & ClaimKinds;
+    /** Only `who` reaches `to` (links from inside `to` don't count); `from` narrows the files looked at. */
+    only?: {
+        who: ClaimSide;
+        to: ClaimSide;
+        from?: ClaimSide;
+    } & ClaimKinds;
+    /** `from` reaches `to` only by landing on `via`. */
+    through?: {
+        from: ClaimSide;
+        to: ClaimSide;
+        via: ClaimSide;
+    } & ClaimKinds;
+    why?: string;
+    draft?: boolean;
+    /** A broken claim is an error in `check` instead of a finding. */
+    enforce?: boolean;
+    /** Areas whose page lists the claim, besides the ones it names. */
+    areas?: string[];
+}
+/** The verbs a line between areas reads with, in display order. */
+export type Verb = 'uses' | 'shows' | 'asks the server' | 'tells' | 'talks to the desktop' | 'reads' | 'runs' | 'generates';
+/** One file-to-file link, as an example on a line or a claim. */
+export interface LinkExample {
+    from: string;
+    to: string;
+    kind: string;
+    label: string | null;
+}
+export interface Area {
+    id: string;
+    name: string;
+    why: string | null;
+    draft: boolean;
+    /** `map`: written in the map file. `folders`: no areas written, so grouped by folder. `other`: parts no written area claims. */
+    source: 'map' | 'folders' | 'other';
+    folders: string[];
+    /** Part ids, biggest first. */
+    parts: string[];
+    files: number;
+    tests: number;
+    /** Links between two files of the area. */
+    internalLinks: number;
+    /** Server-call links (graphql, trpc, http) its files make, inside the area too. */
+    serverCalls: number;
+    /** Distinct server calls among them. */
+    serverOps: number;
+}
+/** Every link of one verb from one area into another. */
+export interface AreaLink {
+    id: string;
+    from: string;
+    to: string;
+    verb: Verb;
+    count: number;
+    /** Links by kind, biggest first. */
+    kinds: Record<string, number>;
+    /** Distinct files the links come from. */
+    files: number;
+    /** Links per part on each side, biggest first. */
+    fromParts: Record<string, number>;
+    toParts: Record<string, number>;
+    /** Every link is a GraphQL call: one area uses queries whose documents live in the other. */
+    viaQueries: boolean;
+    /** Up to three, real code before tests, different parts first. */
+    examples: LinkExample[];
+}
+export interface ClaimResult {
+    says: string;
+    why: string | null;
+    draft: boolean;
+    enforce: boolean;
+    form: 'never' | 'only' | 'through';
+    /** The claim's rule as written: `{ never: { from, to, kind } }`. */
+    rule: Record<string, unknown>;
+    holds: boolean;
+    /** Links that break it. */
+    count: number;
+    /** Distinct files they come from. */
+    files: number;
+    /** Links the claim looked at, broken or not, and their verbs. */
+    scope: number;
+    scopeByVerb: Record<string, number>;
+    byKind: Record<string, number>;
+    /** Where it breaks: area to area (or group to group for `each`), biggest first, up to 8. */
+    pairs: {
+        from: string;
+        to: string;
+        count: number;
+    }[];
+    pairsTotal: number;
+    examples: LinkExample[];
+    /** Areas the claim is about: the ones it names, plus its `areas`. */
+    areas: string[];
 }
 export interface Description {
     hash: string;
