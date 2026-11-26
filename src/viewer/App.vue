@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, shallowRef, watch } from 'vue';
+import AreaPage from './components/AreaPage.vue';
 import ChangesPanel from './components/ChangesPanel.vue';
+import OverviewPage from './components/OverviewPage.vue';
 import DetailPanel from './components/DetailPanel.vue';
 import GapsPanel from './components/GapsPanel.vue';
 import { cycleTheme, theme } from './theme';
@@ -18,6 +20,7 @@ import {
 } from './graphs';
 import { layoutModel, type Placed } from './layout';
 import { partLabel, textOf } from './mapIndex';
+import { areaById, areaOfPart, hasOverview } from './overview';
 
 const { index, error, load } = useMapData();
 const state = useViewState();
@@ -51,8 +54,22 @@ const screens = computed(() =>
     .sort((a, b) => a.route.path.localeCompare(b.route.path))
 );
 
+/** The map opens on its areas when it has them and enough parts for them to help. */
+const overviewOn = computed(() => !!index.value && hasOverview(index.value));
+const openArea = computed(() =>
+  index.value && state.area ? areaById(index.value, state.area) : null
+);
+/** The overview or an area page, which replace the canvas; null for the canvas views. */
+const page = computed<'overview' | 'area' | null>(() =>
+  overviewOn.value && state.view === 'map' && !state.part && !state.cards
+    ? openArea.value
+      ? 'area'
+      : 'overview'
+    : null
+);
+
 const model = computed<MapModel | null>(() => {
-  if (!index.value) return null;
+  if (!index.value || page.value) return null;
   if (state.view === 'screens') {
     return route.value
       ? screenModel(index.value, route.value, state.depth, state.mode)
@@ -94,6 +111,8 @@ const select = (selection: { kind: SelectionKind; id: string }) => {
 
 const openPart = (id: string) => {
   state.view = 'map';
+  if (overviewOn.value && index.value)
+    state.area = areaOfPart(index.value, id)?.id ?? null;
   state.part = id;
   state.selection = { kind: 'part', id };
   panel.value = 'detail';
@@ -129,9 +148,30 @@ const onPick = (result: { kind: SelectionKind | 'screen'; id: string }) => {
       : result.kind === 'operation'
         ? index.value?.operations.get(result.id)?.part
         : undefined;
-  if (part && state.view === 'map') state.part = part;
+  if (part && state.view === 'map') {
+    if (overviewOn.value && index.value)
+      state.area = areaOfPart(index.value, part)?.id ?? null;
+    state.part = part;
+  }
   select({ kind: result.kind, id: result.id });
 };
+
+/** A file named on the overview: its part, with the file open in the side panel. */
+const openFile = (id: string) => {
+  state.view = 'map';
+  onPick({ kind: 'file', id });
+};
+
+const goArea = (id: string | null) => {
+  state.view = 'map';
+  state.part = null;
+  state.cards = false;
+  state.area = id;
+  state.selection = null;
+};
+
+const goAreaByName = (name: string) =>
+  goArea(index.value?.graph.areas?.find((area) => area.name === name)?.id ?? null);
 
 /** One level up from a part: the overview, with the part still selected so it's easy to find. */
 const goUp = () => {
@@ -144,11 +184,22 @@ const goUp = () => {
 const goHome = () => {
   state.view = 'map';
   state.part = null;
+  state.area = null;
+  state.cards = false;
   state.selection = null;
 };
 
-const showPanel = computed(
-  () => panel.value !== 'detail' || !!state.selection || !isNarrow
+/** Where "‹" in the part view goes: the part's area on the overview, else every part. */
+const upLabel = computed(() =>
+  overviewOn.value && !state.cards && openArea.value
+    ? `‹ ${openArea.value.name}`
+    : '‹ All parts'
+);
+
+const showPanel = computed(() =>
+  page.value
+    ? panel.value !== 'detail' || !!state.selection
+    : panel.value !== 'detail' || !!state.selection || !isNarrow
 );
 </script>
 
@@ -166,6 +217,21 @@ const showPanel = computed(
         {{ index?.graph.meta.title ?? 'Map' }}
       </button>
       <nav class="flex min-w-0 items-center gap-1 text-sm text-slate-500">
+        <template
+          v-if="state.view === 'map' && overviewOn && !state.cards && openArea"
+        >
+          <span>›</span>
+          <button
+            v-if="state.part"
+            type="button"
+            data-test-id="crumb-area"
+            class="truncate text-slate-600"
+            @click="goArea(openArea.id)"
+          >
+            {{ openArea.name }}
+          </button>
+          <span v-else class="truncate text-slate-800">{{ openArea.name }}</span>
+        </template>
         <template v-if="state.view === 'map' && state.part && index">
           <span>›</span>
           <span class="truncate text-slate-800">{{
@@ -197,7 +263,7 @@ const showPanel = computed(
             "
             @click="state.view = view"
           >
-            {{ view === 'map' ? 'Parts' : 'Screens' }}
+            {{ view === 'screens' ? 'Screens' : overviewOn ? 'Overview' : 'Parts' }}
           </button>
         </div>
         <div
@@ -268,6 +334,31 @@ const showPanel = computed(
     <p v-if="error" class="p-6 text-sm text-red-700">{{ error }}</p>
 
     <main v-else-if="index" class="relative flex min-h-0 flex-1">
+      <div
+        v-if="page"
+        :key="`${page}:${state.area ?? ''}`"
+        class="ov min-h-0 min-w-0 flex-1 overflow-y-auto"
+      >
+        <AreaPage
+          v-if="page === 'area' && openArea"
+          :index="index"
+          :area="openArea"
+          :mode="state.mode"
+          @back="goArea(null)"
+          @open-area-by-name="goAreaByName"
+          @open-part="openPart"
+          @open-file="openFile"
+        />
+        <OverviewPage
+          v-else
+          :index="index"
+          :mode="state.mode"
+          @open-area="goArea"
+          @open-area-by-name="goAreaByName"
+          @open-file="openFile"
+          @all-parts="state.cards = true"
+        />
+      </div>
       <aside
         v-if="state.view === 'screens'"
         class="w-full overflow-y-auto border-r border-slate-200 bg-white md:w-72"
@@ -304,7 +395,7 @@ const showPanel = computed(
       </aside>
 
       <section
-        v-if="state.view === 'map' || route"
+        v-if="!page && (state.view === 'map' || route)"
         class="relative min-w-0 flex-1"
       >
         <button
@@ -314,7 +405,16 @@ const showPanel = computed(
           class="absolute top-2 left-2 z-10 rounded-md border border-slate-300 bg-white/90 px-3 py-1.5 text-sm text-slate-700 shadow-sm"
           @click="goUp"
         >
-          ‹ All parts
+          {{ upLabel }}
+        </button>
+        <button
+          v-else-if="state.view === 'map' && overviewOn && state.cards"
+          type="button"
+          data-test-id="map-overview"
+          class="absolute top-2 left-2 z-10 rounded-md border border-slate-300 bg-white/90 px-3 py-1.5 text-sm text-slate-700 shadow-sm"
+          @click="goHome"
+        >
+          ‹ Overview
         </button>
         <div
           v-if="state.view === 'screens' && route"

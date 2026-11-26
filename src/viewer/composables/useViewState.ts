@@ -4,6 +4,10 @@ import type { Mode } from '../mapIndex';
 
 export interface ViewState {
   view: 'map' | 'screens';
+  /** The area open on the overview (level 1), by id. */
+  area: string | null;
+  /** Every part as a card, the map before areas, instead of the overview. */
+  cards: boolean;
   part: string | null;
   screen: string | null;
   depth: number;
@@ -25,6 +29,8 @@ const read = (): ViewState => {
   const selectionKind = SELECTION_KINDS.find((candidate) => candidate === kind);
   return {
     view: params.get('view') === 'screens' ? 'screens' : 'map',
+    area: params.get('area'),
+    cards: params.get('cards') === '1',
     part: params.get('part'),
     screen: params.get('screen'),
     depth: Number(params.get('depth') ?? 3) || 3,
@@ -40,6 +46,8 @@ const read = (): ViewState => {
 const write = (state: ViewState) => {
   const params = new URLSearchParams();
   params.set('view', state.view);
+  if (state.area) params.set('area', state.area);
+  if (state.cards) params.set('cards', '1');
   if (state.part) params.set('part', state.part);
   if (state.screen) params.set('screen', state.screen);
   if (state.depth !== 3) params.set('depth', String(state.depth));

@@ -1,5 +1,5 @@
 import type { DescribeContext } from './describe/prompt.js';
-import type { Graph } from './model.js';
+import type { AreaSpec, ClaimSpec, Graph } from './model.js';
 /**
  * The adapter interface version this sinopia implements. Bump it on any change
  * an existing adapter has to follow, and add a section to docs/adapters.md
@@ -38,6 +38,10 @@ export interface Adapter {
         repo: string;
         artifacts: string;
     }): Promise<DescribeContext>;
+    /** The app's areas (`export const areas` in a map file). Without them the core groups parts by folder. */
+    areas?: Record<string, AreaSpec> | null;
+    /** Statements about the app's shape the scan checks (`export const claims` in a map file). */
+    claims?: ClaimSpec[];
 }
 /** Thrown when an adapter was written for another interface version. */
 export declare class AdapterVersionError extends Error {

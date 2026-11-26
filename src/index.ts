@@ -16,6 +16,9 @@ export {
 } from './adapters/files.js';
 export { autoAdapter, chooseMode, fileKindOf, folderAdapter } from './adapters/folders.js';
 export { type Coverage, coverageOf, formatCoverage } from './coverage.js';
+export { addAreas, claimStatus, formatAreas } from './areaReport.js';
+export { assignAreas, fileEdges, foldAreas, folderAreas, OVERVIEW_MIN_PARTS, verbOf, VERBS } from './areas.js';
+export { checkSpecs, evaluateClaim, evaluateClaims } from './claims.js';
 export { addLink, fileLinks, linkTargets } from './links.js';
 export { type CliOptions, readState, runCli } from './cli.js';
 export {

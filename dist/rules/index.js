@@ -9,6 +9,7 @@ import { makeResolver } from './resolve.js';
 import { custom, dataFiles, external, externalServices, pythonImports, runs, spawn, vitest, vueRoutes } from './tools.js';
 import { trpc } from './trpc.js';
 import { globImports } from './vite.js';
+import { checkSpecs } from '../claims.js';
 import { vueComponents } from './vue.js';
 import { graphql } from './graphql.js';
 /** Where a project keeps its map rules. `sinopia` loads them by default when they exist. */
@@ -76,11 +77,16 @@ export const mapAdapter = async (file, repo, name) => {
     const mode = module.base === 'js' || module.base === 'plain' ? module.base : chooseMode(listFiles(repo));
     if (module.base !== undefined && module.base !== mode)
         throw new Error(`${file}: base must be 'js' or 'plain', not ${JSON.stringify(module.base)}`);
+    const problems = checkSpecs(module.areas, module.claims);
+    if (problems.length > 0)
+        throw new Error(`${file}: ${problems.join('; ')}`);
     const base = folderAdapter(repo, { mode, name });
     return {
         ...base,
         interfaceVersion: ADAPTER_INTERFACE_VERSION,
         name: `${mode} + map rules`,
+        areas: module.areas ?? null,
+        claims: module.claims ?? [],
         async scan(input) {
             const graph = await base.scan(input);
             applyRules(rules, graph, input);

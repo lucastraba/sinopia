@@ -2,7 +2,7 @@
 
 The generic scan sees folders and imports. Most codebases also connect in ways imports don't show: a client calls a server procedure by name, a module emits an event another one listens for, a Python process posts to a Node server. A map file tells sinopia where those connections are, one rule per mechanism, and sinopia does the parsing and matching.
 
-The file is `.sinopia/map.mjs` in the repo. It's meant to be read in review: each rule says where to look, what the call looks like in the code, and why the rule exists. `sinopia map docs` prints this page; `sinopia map init` writes an empty map.
+The file is `.sinopia/map.mjs` in the repo. It's meant to be read in review: each rule says where to look, what the call looks like in the code, and why the rule exists. `sinopia map docs` prints this page; `sinopia map init` writes an empty map. The same file can name the app's areas and the claims its code should keep ([Areas and claims](#areas-and-claims-the-overview)).
 
 ```js
 // .sinopia/map.mjs
@@ -182,9 +182,83 @@ custom({
 
 `check` reports how many links came from custom code. When a custom rule looks like it would fit other repos, it's a candidate primitive: say so in an issue on sinopia.
 
+## Areas and claims: the overview
+
+A map of a few hundred files has dozens of parts, and a card for each with a line for every pair that touches is a wall nobody reads. Areas are the pieces a person would draw on a whiteboard: the game rules, the screen, the server, the tooling. The viewer opens on them when a map has 12 parts or more: a paragraph about the app, the claims, one card per area, and one named line per pair of areas and kind of link ("Screen uses Game rules: 224"). Tapping an area shows its parts and its lines in and out; tapping a part opens the part view as before.
+
+```js
+// .sinopia/map.mjs, next to the rules
+export const areas = {
+  'Web app': { folders: ['apps/web'], why: 'What the user sees: the lists and the todos.' },
+  'UI kit': { folders: ['apps/web/src/ui'], why: 'Buttons and inputs, with no idea what a todo is.', draft: true },
+  Server: { folders: ['apps/server'], why: 'Keeps the todos and answers the web app.' },
+  Tooling: { folders: ['scripts'], why: 'Seeds the database. None of it ships.' },
+};
+
+export const claims = [
+  { says: 'The UI kit never imports the app', never: { from: 'UI kit', to: 'Web app', kind: 'import' } },
+  { says: 'Only the server touches the database', only: { who: 'Server', to: { folders: ['apps/server/src/db'] } }, draft: true },
+  { says: 'The web app reaches the server only through its routers', through: { from: 'Web app', to: 'Server', via: { folders: ['apps/server/src/routers'] } }, enforce: true },
+];
+```
+
+**Areas.** Each key is the name the viewer shows; `folders` lists repo-relative folders, `why` is the sentence on its card, and `draft: true` marks one an agent wrote and nobody has confirmed. Every part goes to the area with the longest folder that holds it, so `apps/web/src/ui` above is the UI kit and the rest of `apps/web` the web app. `(root)` stands for the files at the top of the repo. A part no area holds goes to an area called Other, and `check` warns about it (`part-without-area`). Aim for 3 to 9 areas, by what the code does rather than how the folders happen to sit. A server is not an area: calls to it read as "asks the server".
+
+Without `areas`, the overview groups parts by top folder (a workspace package stays one group), and says so. A map with fewer than 12 parts skips the overview and opens on the parts, as it always has.
+
+**Lines.** Every file-to-file link between two areas folds into one line per (from, to, verb), with its count, the parts on each end, and three real examples. Links inside an area stay out. The verb comes from the link's kind:
+
+| Verb | Kinds |
+| --- | --- |
+| uses | `import`, `inject`, `flag`, `glob`, `config`, and any kind not listed |
+| shows | `component` (a file renders another) |
+| reads | `data` (YAML, JSON and the like), `i18n` |
+| asks the server | `graphql`, `trpc`, `http`, `ws` |
+| tells | `event` and kinds ending in `-event` |
+| talks to the desktop | `ipc`, `bridge` |
+| runs | `runs`, `spawn` |
+| generates | `codegen` |
+
+**Claims** are what the code promises, said in a sentence (`says`) and checked by every scan. Three forms:
+
+- `never: { from, to, kind? }`: nothing in `from` links into `to`. `never: { each: 'apps/web/src/features/*', kind? }` says no two matches of the pattern link to each other.
+- `only: { who, to, from?, kind? }`: links into `to` come only from `who`. With `from`, only links starting there count.
+- `through: { from, to, via, kind? }`: every link from `from` to `to` lands on `via`. A link that starts on `via` is the way through, so it never breaks the claim, also when `via` sits inside `from`: with `from` the server, `via` its routers and `to` its database, routers → database holds and any other server file → database breaks it.
+
+A side is an area's name, or `{ area | areas, folders, files, except }`: `files` takes globs (`'**/*.store.ts'`), and `except` takes the same shape to leave files out. `kind` (or `kinds`) narrows a claim to some link kinds; `kind: 'import'` includes components and data files, which are imports too. `why` says why the promise matters, `areas` lists more areas whose pages show the claim, and `draft: true` marks one an agent wrote. A broken claim is a finding, not an error, unless it says `enforce: true`: then `check` fails on it (`claim-broken`), the way a lint rule would. Claims are meant to be read, so a broken draft usually means the sentence needs changing, not the code. `check` refuses a claim that names an area the map doesn't have, or an option it doesn't know.
+
+`check` prints the areas, the lines and every claim (here for that todo app, which has too few parts for the viewer to open on its areas):
+
+```
+  Areas: 4 from the map (the viewer skips them: fewer than 12 parts)
+    Web app: 2 parts, 3 files
+       why: What the user sees: the lists and the todos.
+    UI kit: 1 part, 1 file [draft]
+       why: Buttons and inputs, with no idea what a todo is.
+    Server: 2 parts, 2 files
+       why: Keeps the todos and answers the web app.
+    Tooling: 1 part, 1 file
+       why: Seeds the database. None of it ships.
+  Lines between areas: 3 (7 file links folded)
+    Web app uses UI kit: 2
+    Tooling uses Server: 1
+    Web app uses Server: 1
+  Claims: 2 hold, 1 broken
+    1. ✓ The UI kit never imports the app
+       holds: nothing crosses at all
+    2. ✗ Only the server touches the database [draft]
+       broken: 1 link from 1 file (Tooling → Server 1)
+         scripts/seed.ts -> apps/server/src/db/db.ts (import)
+    3. ✓ The web app reaches the server only through its routers [enforced]
+       holds: the 1 link goes through it (uses 1)
+  Drafts: 1 area (UI kit) and claim 2, written by an agent and not yet confirmed. Delete `draft: true` to confirm one.
+```
+
+The scan keeps the result in `graph.json` (`areas`, `areaLinks`, `linkTotals`, `claims`), so the viewer shows what `check` printed. `check --json` has them under the same names.
+
 ## What `check` shows
 
-After the coverage numbers, `check` lists every rule: what it looks at, what it found (links by kind, routes, notes), its `why`, and flags for drafts and regular expressions. Then the drafts by number, the count of regular-expression shapes, and the share of links from custom code. `check --json` has the same under `rules`, and the scan keeps it in `graph.json` as `meta.rules`.
+After the coverage numbers, `check` lists every rule: what it looks at, what it found (links by kind, routes, notes), its `why`, and flags for drafts and regular expressions. Then the drafts by number, the count of regular-expression shapes, and the share of links from custom code. Then the areas, the lines between them and the claims (above). `check --json` has the same under `rules`, and the scan keeps it in `graph.json` as `meta.rules`.
 
 Server calls: `graphql`, `trpc` and `http` links count as the calling file's server calls in the viewer, next to the operations an adapter lists.
 

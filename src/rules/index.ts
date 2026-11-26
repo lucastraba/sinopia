@@ -9,6 +9,8 @@ import { makeResolver } from './resolve.js';
 import { custom, dataFiles, external, externalServices, pythonImports, runs, spawn, vitest, vueRoutes } from './tools.js';
 import { trpc } from './trpc.js';
 import { globImports } from './vite.js';
+import { checkSpecs } from '../claims.js';
+import type { AreaSpec, ClaimSpec } from '../model.js';
 import { vueComponents } from './vue.js';
 import { graphql } from './graphql.js';
 
@@ -41,6 +43,10 @@ interface MapModule {
   default?: unknown;
   /** The generic adapter the rules build on: 'js' or 'plain'. Defaults to the one the code suggests. */
   base?: unknown;
+  /** The app's areas: `{ 'Game rules': { folders: ['src/game'], why } }`. */
+  areas?: unknown;
+  /** Statements about the app's shape: `[{ says, never: { from, to, kind } }]`. */
+  claims?: unknown;
 }
 
 /** Runs the rules over a graph in order, writing what each did to `graph.meta.rules`. */
@@ -87,11 +93,15 @@ export const mapAdapter = async (file: string, repo: string, name: string): Prom
   }
   const mode = module.base === 'js' || module.base === 'plain' ? module.base : chooseMode(listFiles(repo));
   if (module.base !== undefined && module.base !== mode) throw new Error(`${file}: base must be 'js' or 'plain', not ${JSON.stringify(module.base)}`);
+  const problems = checkSpecs(module.areas, module.claims);
+  if (problems.length > 0) throw new Error(`${file}: ${problems.join('; ')}`);
   const base = folderAdapter(repo, { mode, name });
   return {
     ...base,
     interfaceVersion: ADAPTER_INTERFACE_VERSION,
     name: `${mode} + map rules`,
+    areas: (module.areas as Record<string, AreaSpec> | undefined) ?? null,
+    claims: (module.claims as ClaimSpec[] | undefined) ?? [],
     async scan(input) {
       const graph = await base.scan(input);
       applyRules(rules as Rule[], graph, input);

@@ -3,6 +3,7 @@ import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { parseArgs } from 'node:util';
 import { assertAdapterVersion } from './adapter.js';
+import { addAreas, formatAreas } from './areaReport.js';
 import { coverageOf, formatCoverage, formatRules } from './coverage.js';
 import { describe } from './describe/describe.js';
 import { diffGraphs } from './diff/diff.js';
@@ -25,11 +26,13 @@ const usage = (command) => `${command} <command>
                            The viewer for this map`;
 /** Scans with the adapter, then runs the generic checks on what it returned. */
 const scanAt = async (options, ref) => {
+    const { adapter } = options;
     const graph = await adapterScan(options, ref);
     // A plain-mode adapter that adds its own links has links after all.
     if (graph.files.some((file) => (file.links?.length ?? 0) > 0))
         graph.meta.hasLinks = true;
     graph.gaps.push(...validateGraph(graph));
+    addAreas(graph, adapter.areas ?? null, adapter.claims ?? []);
     return graph;
 };
 const adapterScan = async ({ adapter, repo, out }, ref) => {
@@ -105,6 +108,10 @@ const scanCommand = async (options) => {
             ? `${graph.subgraphs.length} subgraphs${graph.backend ? ` (${graph.backend.label})` : ''}`
             : '',
         graph.meta.hasLinks ? `${graph.cycles.length} cycles` : '',
+        graph.areas?.length
+            ? `${graph.areas.length} area${graph.areas.length === 1 ? '' : 's'} with ${graph.areaLinks?.length ?? 0} line${graph.areaLinks?.length === 1 ? '' : 's'} between them`
+            : '',
+        graph.claims?.length ? `claims ${graph.claims.filter((claim) => claim.holds).length} hold, ${graph.claims.filter((claim) => !claim.holds).length} broken` : '',
     ].filter(Boolean);
     console.log(`Scanned ${graph.source.label} in ${((Date.now() - started) / 1000).toFixed(1)}s: ` +
         [
@@ -153,7 +160,7 @@ export const runCli = async (options) => {
         const graph = await scanAt(options, null);
         const coverage = coverageOf(graph, options.adapterSource ?? adapter.name);
         if (values.json) {
-            console.log(JSON.stringify({ ...coverage, rules: graph.meta.rules ?? null, gapList: graph.gaps }, null, 2));
+            console.log(JSON.stringify({ ...coverage, rules: graph.meta.rules ?? null, areas: graph.areas, areaLinks: graph.areaLinks, linkTotals: graph.linkTotals, claims: graph.claims, gapList: graph.gaps }, null, 2));
         }
         else {
             console.log(`Check of ${repo} with adapter ${coverage.adapter} (interface v${adapter.interfaceVersion})`);
@@ -162,6 +169,8 @@ export const runCli = async (options) => {
             if (graph.meta.rules)
                 for (const line of formatRules(graph.meta.rules))
                     console.log(`  ${line}`);
+            for (const line of formatAreas(graph))
+                console.log(`  ${line}`);
             printGaps(graph);
         }
         if (!coverage.passes)

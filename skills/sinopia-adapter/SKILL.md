@@ -111,6 +111,17 @@ Then check precision: pick five links of each new kind from `graph.json` (`sinop
 
 If the adapter throws, `sinopia check` prints the stack trace, and the top frame in `.sinopia/adapter.mjs` is where to look. A map rule that throws becomes a `rule-failed` error with its stack; the other rules still run.
 
+## 6b. Draft areas and claims
+
+Once the rules hold, give the map its overview (`sinopia map docs`, "Areas and claims"). It matters most on repos with 12 parts or more, where the viewer opens on it.
+
+1. Read the folders, the part list in `graph.json` and the app's README, then write `export const areas` with 3 to 9 areas, each `{ folders, why, draft: true }`. Name them by what they do for the product ("Game rules", "Reports & dashboards", "Tooling"), not by folder. A server is not an area. Put the bare root (`main.ts`, `App.vue`) with what it mounts, and tests, scripts, CI and `(root)` config in Tooling unless the user splits them.
+2. Run `check`. Every part should land somewhere: fix each `part-without-area` warning by adding its folder to an area. Look at the lines: one area that sends or takes most of the links usually holds two things; split it.
+3. Write `export const claims`, 3 to 6, each `{ says, never | only | through, why, draft: true }`. Start from the rules' `why` lines and the README: "the core never imports the UI", "only the store calls the API", "the page reaches the desktop only through the bridge". Phrase `says` as a sentence the user would say.
+4. Run `check` again and read each claim's result. Don't rewrite a claim until it passes: a broken claim is either a finding (tell the user, with the examples `check` printed) or a sentence that says more than was meant (say which, and offer the narrower one). Never add `enforce: true` yourself.
+5. If the repo keeps a full adapter (`.sinopia/adapter.mjs`), `--adapter auto` loads it and never reads `areas` or `claims` from the map, so the overview falls back to folders and shows no claims. Either export the same `areas` and `claims` from the adapter object (fields `areas` and `claims`, as in `docs/adapters.md`), or run every `check`, `scan` and `refresh` with `--adapter .sinopia/map.mjs` until the adapter is removed. Say which one you did in the report.
+6. In the report, list the areas (name, part and file counts, one line why) and each claim with holds/broken and its count, so the user can confirm them, move a folder, or reword a claim without opening the file.
+
 ## 7. Upgrading to a new interface version
 
 When `sinopia` says the adapter implements an older interface version:
@@ -123,5 +134,5 @@ When `sinopia` says the adapter implements an older interface version:
 
 - Commit `.sinopia/map.mjs` (or the adapter) with the repo: on the branch the user is working on, or on a new branch when you're not sure that's wanted. Sinopia loads it automatically from then on, also for `refresh` timers, unless the repo also has `.sinopia/adapter.mjs`: then the adapter wins until it's removed, and the map runs only with `--adapter .sinopia/map.mjs`.
 - Put the numbers at the top of the file as a comment: generic baseline and the result (isolated count, links by kind, part-to-part links), with the date. The next agent compares against it.
-- Tell the user what changed, in numbers: errors, isolated files before and after, part-to-part links before and after, the link kinds added with counts, what's still isolated and why, and any mechanism you saw but didn't map, with the reason. Then list the draft rules by number, one line each, so they can confirm or reject them without opening the file.
+- Tell the user what changed, in numbers: errors, isolated files before and after, part-to-part links before and after, the link kinds added with counts, what's still isolated and why, and any mechanism you saw but didn't map, with the reason. Then list the draft rules by number, one line each, so they can confirm or reject them without opening the file, then the draft areas and claims (6b).
 - If the map already had descriptions, `sinopia refresh --force` (or `scan` then `describe`) updates them; while `.sinopia/adapter.mjs` is still there, add `--adapter .sinopia/map.mjs`, or the refresh reads the adapter. Files whose content didn't change keep their descriptions; the new links show in the viewer at once.
